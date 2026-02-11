@@ -15,17 +15,15 @@ pip install -r requirements.txt
 
 ## Start AnyLog
 
-From the repo root (`EADS/`):
+AnyLog runs via the [AnyLog docker-compose repo](https://github.com/AnyLog-co/docker-compose) (cloned separately, not part of this repo). From that repo's root:
 
 ```bash
-cd docker-compose/docker-makefiles
 make up ANYLOG_TYPE=anylog-standalone
 ```
 
 Attach to the AnyLog CLI (in a separate terminal):
 
 ```bash
-cd docker-compose/docker-makefiles
 make attach ANYLOG_TYPE=anylog-standalone
 ```
 
@@ -152,7 +150,7 @@ TypeError: get_one_value() takes 2 positional arguments but 3 were given
 This is a potential bug in AnyLog's `run grpc client` handler. The gRPC server itself works correctly (verified with a standalone Python gRPC client). The bug crashes AnyLog and may make the container unresponsive, requiring a restart from the repo root:
 
 ```bash
-cd docker-compose/docker-makefiles
+# From the AnyLog docker-compose repo
 make down ANYLOG_TYPE=anylog-standalone
 make up ANYLOG_TYPE=anylog-standalone
 ```
@@ -190,13 +188,13 @@ sql eads format = table "select * from voltage_readings order by timestamp desc 
 
 ## AnyLog Config Changes (already applied)
 
-These changes in the AnyLog config files were required for Docker on macOS:
+These changes in the AnyLog docker-compose config files were required for Docker on macOS. The files are in the [AnyLog docker-compose repo](https://github.com/AnyLog-co/docker-compose) under `docker-makefiles/anylog-standalone/`:
 
-**`docker-compose/docker-makefiles/anylog-standalone/base_configs.env`:**
+**`base_configs.env`:**
 - `TCP_BIND=false` — allows Docker port mapping to work
 - `REST_BIND=false` — allows Docker port mapping to work
 
-**`docker-compose/docker-makefiles/anylog-standalone/advance_configs.env`:**
+**`advance_configs.env`:**
 - `NIC_TYPE=""` — empty string instead of `"lo"` (loopback binds only inside container)
 
 ---
@@ -209,3 +207,4 @@ These changes in the AnyLog config files were required for Docker on macOS:
 | REST POST | Working | Uses `run msg client` with `broker = rest` for topic mapping |
 | gRPC | AnyLog Bug | `TypeError: get_one_value()` — Possible AnyLog internal issue |
 | Sample | Working | Prints data to stdout, no network needed |
+

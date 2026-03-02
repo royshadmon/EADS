@@ -1,116 +1,111 @@
 """
-EADS Data Generator
-Generates mock electrical sensor data and pushes it to AnyLog via REST (PUT/POST) or serves it via gRPC.
+EADS Data Generator - Sprint 2
+Streams PowerGridSense dataset to AnyLog via REST PUT.
 
-Voltage simulation:
-    - 60 Hz AC sine wave: V(t) = V_peak * sin(2π * 60 * t)
-    - V_peak = V_rms * √2 (e.g. 120V RMS → ~169.7V peak)
-    - Small Gaussian noise added for realism
+Dataset: https://www.kaggle.com/datasets/ziya07/powergridsense-dataset
 
-Data format:
-    - timestamp: ISO 8601 UTC
-    - voltage: float (V) — instantaneous AC voltage
-    - sensor_id: string identifier
-    - latitude / longitude: geo-coordinates
+Fields in dataset:
+    - Timestamp: Date and time of sensor reading
+    - Sensor_ID: Unique identifier for the sensor
+    - Voltage (V): Voltage level in volts
+    - Current (A): Current in amperes
+    - Power (kW): Active power in kilowatts
+    - Frequency (Hz): System frequency
+    - Power_Factor: Ratio of real to apparent power
+    - Location: Geographic/logical area of sensor
+    - Anomaly_Label: Multi-class anomaly indicator (0-4)
 
 Usage:
-    # REST PUT (direct to AnyLog operator)
-    python eads_data_generator.py rest-put --conn 127.0.0.1:32149 --hz 1000
+    # Stream dataset continuously (loops when reaching end)
+    python eads_data_generator.py stream --csv powergridsense.csv --conn 127.0.0.1:32149
 
-    # REST POST (topic-based, requires MQTT client on AnyLog node)
-    python eads_data_generator.py rest-post --conn 127.0.0.1:32149 --topic eads-sensors --hz 1000
+    # Send one batch of data
+    python eads_data_generator.py send --csv powergridsense.csv --conn 127.0.0.1:32149 --rows 100
 
-    # gRPC server (AnyLog connects to this as a client)
-    python eads_data_generator.py grpc-serve --port 50051 --hz 1000
-
-    # Print sample data without sending
-    python eads_data_generator.py sample --rows 5
+    # Print sample from dataset
+    python eads_data_generator.py sample --csv powergridsense.csv --rows 5
 """
 
 import argparse
-import datetime
+import csv
 import json
-import math
-import random
 import sys
 import time
-from concurrent import futures
+from typing import Iterator
 
 import requests
 
-# gRPC imports - deferred to avoid hard failure if only using REST
-try:
-    import grpc
-    from grpc_tools import protoc
-    HAS_GRPC = True
-except ImportError:
-    HAS_GRPC = False
-
-
-# ---------------------------------------------------------------------------
-# Sensor configuration
-# ---------------------------------------------------------------------------
-
-AC_FREQ_HZ = 60  # US mains frequency
-
-SENSORS = [
-    {"sensor_id": "EADS-V-001", "lat": 32.7157, "lon": -117.1611, "rms_voltage": 120.0},
-    {"sensor_id": "EADS-V-002", "lat": 32.7300, "lon": -117.1500, "rms_voltage": 240.0},
-    {"sensor_id": "EADS-V-003", "lat": 32.7050, "lon": -117.1700, "rms_voltage": 480.0},
-    {"sensor_id": "EADS-V-004", "lat": 32.7400, "lon": -117.1400, "rms_voltage": 120.0},
-    {"sensor_id": "EADS-V-005", "lat": 32.7200, "lon": -117.1800, "rms_voltage": 240.0},
-]
+# Configuration
 
 DBMS_NAME = "eads"
-TABLE_NAME = "voltage_readings"
+TABLE_NAME = "grid_readings"
+
+# CSV Data Loading
+
+def load_dataset(csv_path: str) -> list[dict]:
+    """Load the PowerGridSense CSV dataset into memory."""
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            data = list(reader)
+            print(f"[Dataset] Loaded {len(data)} rows from {csv_path}")
+            if data:
+                print(f"[Dataset] Fields: {', '.join(data[0].keys())}")
+            return data
+    except FileNotFoundError:
+        print(f"[Error] CSV file not found: {csv_path}")
+        print("\nDownload the PowerGridSense dataset from:")
+        print("https://www.kaggle.com/datasets/ziya07/powergridsense-dataset")
+        sys.exit(1)
+    except Exception as e:
+        print(f"[Error] Failed to load CSV: {e}")
+        sys.exit(1)
 
 
-# ---------------------------------------------------------------------------
-# Mock data generation — 60 Hz AC sine wave
-# ---------------------------------------------------------------------------
+def dataset_iterator(data: list[dict]) -> Iterator[dict]:
+    """Infinite iterator that loops through the dataset."""
+    if not data:
+        raise ValueError("Dataset is empty")
 
-def ac_voltage(sensor: dict, t_seconds: float) -> float:
-    """Instantaneous AC voltage: V_peak * sin(2π * 60 * t) + noise."""
-    v_peak = sensor["rms_voltage"] * math.sqrt(2)
-    v = v_peak * math.sin(2 * math.pi * AC_FREQ_HZ * t_seconds)
-    noise = random.gauss(0, sensor["rms_voltage"] * 0.005)  # ±0.5% noise
-    return round(v + noise, 4)
+    while True:
+        for row in data:
+            yield row
 
 
-def generate_reading(sensor: dict, ts: datetime.datetime, t_seconds: float) -> dict:
-    """Generate a single sensor reading at a point on the AC sine wave."""
+def format_reading(row: dict) -> dict:
+    """
+    Convert CSV row to JSON format for AnyLog.
+    Preserves all fields from the dataset.
+    """
+    # The CSV row is already a dict with string values
+    # Send it as-is, letting AnyLog handle type conversion based on its schema
     return {
-        "timestamp": ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-        "voltage": ac_voltage(sensor, t_seconds),
-        "sensor_id": sensor["sensor_id"],
-        "latitude": sensor["lat"],
-        "longitude": sensor["lon"],
+        "timestamp": row.get("Timestamp", ""),
+        "sensor_id": row.get("Sensor_ID", ""),
+        "voltage": row.get("Voltage (V)", ""),
+        "current": row.get("Current (A)", ""),
+        "power": row.get("Power (kW)", ""),
+        "frequency": row.get("Frequency (Hz)", ""),
+        "power_factor": row.get("Power_Factor", ""),
+        "location": row.get("Location", ""),
+        "anomaly_label": row.get("Anomaly_Label", ""),
     }
 
-
-def generate_batch(rows: int, sample_rate_hz: int = 1000) -> list[dict]:
-    """Generate a batch of sensor readings at the given sample rate."""
-    readings = []
-    ts = datetime.datetime.now(datetime.timezone.utc)
-    dt = datetime.timedelta(seconds=1.0 / sample_rate_hz)
-    t_seconds = time.time()  # continuous time reference for sine wave
-    for i in range(rows):
-        sensor = SENSORS[i % len(SENSORS)]
-        readings.append(generate_reading(sensor, ts, t_seconds))
-        ts += dt
-        t_seconds += 1.0 / sample_rate_hz
-    return readings
-
-
-# ---------------------------------------------------------------------------
-# REST PUT - direct attribute-to-column mapping
-# ---------------------------------------------------------------------------
+# REST PUT - Send data to AnyLog
 
 def rest_put(conn: str, auth: tuple, payload: list[dict],
-             mode: str = "streaming") -> bool:
+             mode: str = "file") -> bool:
     """
     Push data to AnyLog via REST PUT.
-    Headers carry dbms/table; JSON body carries the data.
+
+    Args:
+        conn: AnyLog endpoint (host:port)
+        auth: Optional (user, password) tuple
+        payload: List of readings to send
+        mode: "file" for immediate write, "streaming" for buffered
+
+    Returns:
+        True if successful, False otherwise
     """
     headers = {
         "type": "json",
@@ -120,9 +115,10 @@ def rest_put(conn: str, auth: tuple, payload: list[dict],
         "Content-Type": "text/plain",
     }
     url = f"http://{conn}"
+
     try:
         r = requests.put(url, auth=auth or None, timeout=30,
-                         headers=headers, data=json.dumps(payload))
+                        headers=headers, data=json.dumps(payload))
     except requests.RequestException as e:
         print(f"[REST PUT] Failed to send to {conn}: {e}")
         return False
@@ -131,199 +127,117 @@ def rest_put(conn: str, auth: tuple, payload: list[dict],
         print(f"[REST PUT] Server returned {r.status_code}: {r.text}")
         return False
 
-    print(f"[REST PUT] Success — sent {len(payload)} readings to {conn}")
     return True
 
+# Streaming Modes
 
-# ---------------------------------------------------------------------------
-# REST POST - topic-based mapping (requires MQTT client on AnyLog node)
-# ---------------------------------------------------------------------------
-
-def rest_post(conn: str, auth: tuple, topic: str,
-              payload: list[dict]) -> bool:
+def stream_continuous(csv_path: str, conn: str, auth: tuple,
+                     batch_size: int = 100, rate_hz: float = 10.0,
+                     mode: str = "file"):
     """
-    Push data to AnyLog via REST POST.
-    Requires an MQTT client with broker=rest configured on the receiving node.
-    The payload includes dbms/table so the MQTT mapping can extract them.
+    Continuously stream dataset in batches.
+    Loops back to start when reaching end of dataset.
+
+    Args:
+        csv_path: Path to PowerGridSense CSV file
+        conn: AnyLog endpoint
+        auth: Optional authentication
+        batch_size: Number of rows per batch
+        rate_hz: Target batches per second (not rows per second)
+        mode: AnyLog ingestion mode ("file" or "streaming")
     """
-    # Embed dbms and table into each row for topic-based extraction
-    enriched = []
-    for row in payload:
-        enriched.append({**row, "dbms": DBMS_NAME, "table": TABLE_NAME})
+    data = load_dataset(csv_path)
+    iterator = dataset_iterator(data)
 
-    headers = {
-        "command": "data",
-        "topic": topic,
-        "User-Agent": "AnyLog/1.23",
-        "Content-Type": "text/plain",
-    }
-    url = f"http://{conn}"
-    try:
-        r = requests.post(url, auth=auth or None, timeout=30,
-                          headers=headers, data=json.dumps(enriched))
-    except requests.RequestException as e:
-        print(f"[REST POST] Failed to send to {conn}: {e}")
-        return False
+    batch_interval = 1.0 / rate_hz  # seconds between batches
+    rows_per_sec = batch_size * rate_hz
 
-    if r.status_code != 200:
-        print(f"[REST POST] Server returned {r.status_code}: {r.text}")
-        return False
+    print(f"\n[Stream] Configuration:")
+    print(f"  Dataset: {csv_path} ({len(data)} rows)")
+    print(f"  Batch size: {batch_size} rows")
+    print(f"  Batch rate: {rate_hz} batches/sec")
+    print(f"  Effective: ~{rows_per_sec:.1f} rows/sec")
+    print(f"  Mode: {mode}")
+    print(f"  Target: {conn}")
+    print(f"\n[Stream] Press Ctrl+C to stop\n")
 
-    print(f"[REST POST] Success — sent {len(payload)} readings to topic '{topic}' on {conn}")
-    return True
-
-
-# ---------------------------------------------------------------------------
-# gRPC server - AnyLog connects here as a client
-# ---------------------------------------------------------------------------
-
-def _ensure_grpc_stubs():
-    """Compile proto and import generated modules at runtime."""
-    if not HAS_GRPC:
-        print("grpcio / grpcio-tools not installed. "
-              "Install with: pip install grpcio grpcio-tools")
-        sys.exit(1)
-
-    import importlib
-    import os
-    proto_dir = os.path.dirname(os.path.abspath(__file__))
-    proto_file = os.path.join(proto_dir, "sensor_data.proto")
-    pb2_path = os.path.join(proto_dir, "sensor_data_pb2.py")
-
-    # Compile proto if stubs don't exist yet
-    if not os.path.exists(pb2_path):
-        print("[gRPC] Compiling sensor_data.proto ...")
-        result = protoc.main([
-            "grpc_tools.protoc",
-            f"-I{proto_dir}",
-            f"--python_out={proto_dir}",
-            f"--grpc_python_out={proto_dir}",
-            proto_file,
-        ])
-        if result != 0:
-            print("[gRPC] Proto compilation failed")
-            sys.exit(1)
-
-    # Import the generated modules
-    spec_pb2 = importlib.util.spec_from_file_location(
-        "sensor_data_pb2", os.path.join(proto_dir, "sensor_data_pb2.py"))
-    pb2 = importlib.util.module_from_spec(spec_pb2)
-    spec_pb2.loader.exec_module(pb2)
-
-    spec_grpc = importlib.util.spec_from_file_location(
-        "sensor_data_pb2_grpc",
-        os.path.join(proto_dir, "sensor_data_pb2_grpc.py"))
-    pb2_grpc = importlib.util.module_from_spec(spec_grpc)
-    spec_grpc.loader.exec_module(pb2_grpc)
-
-    return pb2, pb2_grpc
-
-
-def run_grpc_server(port: int, rows: int, sample_rate_hz: int):
-    """
-    Start a gRPC server that serves sensor data.
-
-    AnyLog connects to this server using:
-        run grpc client where name = eads_sensors and ip = <this_host>
-            and port = <port> and grpc_dir = <dir_with_proto>
-            and proto = sensor_data and function = GetSensorData
-            and request = SensorRequest and response = SensorDataResponse
-            and service = SensorService
-    """
-    pb2, pb2_grpc = _ensure_grpc_stubs()
-
-    class SensorServiceServicer(pb2_grpc.SensorServiceServicer):
-        def GetSensorData(self, request, context):
-            count = request.count if request.count > 0 else rows
-            batch = generate_batch(count, sample_rate_hz)
-            serialized = [json.dumps(r) for r in batch]
-            return pb2.SensorDataResponse(serialized_data=serialized)
-
-        def StreamSensorData(self, request, context):
-            count = request.count if request.count > 0 else rows
-            ts = datetime.datetime.now(datetime.timezone.utc)
-            dt = datetime.timedelta(seconds=1.0 / sample_rate_hz)
-            t_seconds = time.time()
-            for i in range(count):
-                sensor = SENSORS[i % len(SENSORS)]
-                reading = generate_reading(sensor, ts, t_seconds)
-                yield pb2.SensorReading(
-                    timestamp=reading["timestamp"],
-                    voltage=reading["voltage"],
-                    sensor_id=reading["sensor_id"],
-                    latitude=reading["latitude"],
-                    longitude=reading["longitude"],
-                )
-                ts += dt
-                t_seconds += 1.0 / sample_rate_hz
-
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
-    pb2_grpc.add_SensorServiceServicer_to_server(SensorServiceServicer(), server)
-    server.add_insecure_port(f"0.0.0.0:{port}")
-    server.start()
-    print(f"[gRPC] Server listening on 0.0.0.0:{port}")
-    print(f"[gRPC] Serving {rows} readings/request at {sample_rate_hz} Hz")
-    print(f"[gRPC] Press Ctrl+C to stop")
-    print()
-    print("[gRPC] To connect AnyLog to this server, run on the AnyLog node:")
-    print(f"  run grpc client where name = eads_sensors and ip = <THIS_HOST_IP> "
-          f"and port = {port} \\")
-    print(f"    and grpc_dir = <PATH_TO_PROTO_DIR> and proto = sensor_data \\")
-    print(f"    and function = GetSensorData and request = SensorRequest \\")
-    print(f"    and response = SensorDataResponse and service = SensorService \\")
-    print(f"    and dbms = {DBMS_NAME} and table = {TABLE_NAME}")
-
-    try:
-        server.wait_for_termination()
-    except KeyboardInterrupt:
-        print("\n[gRPC] Shutting down...")
-        server.stop(grace=2)
-
-
-# ---------------------------------------------------------------------------
-# Continuous streaming mode (REST)
-# ---------------------------------------------------------------------------
-
-def stream_continuous(conn: str, auth: tuple, method: str, topic: str,
-                      sample_rate_hz: int, batch_size: int, mode: str = "streaming"):
-    """
-    Continuously generate and send batches to sustain the target sample rate.
-    Batch size controls how many readings per HTTP request.
-    """
-    interval = batch_size / sample_rate_hz  # seconds between sends
-    print(f"[Stream] Target: {sample_rate_hz} Hz ({batch_size} readings/batch, "
-          f"1 batch every {interval:.3f}s)")
-    print(f"[Stream] Method: {method.upper()} to {conn}")
-    print("[Stream] Press Ctrl+C to stop\n")
     total_sent = 0
     batches_sent = 0
     start = time.monotonic()
+
     try:
         while True:
             t0 = time.monotonic()
-            batch = generate_batch(batch_size, sample_rate_hz)
-            if method == "put":
-                ok = rest_put(conn, auth, batch, mode)
-            else:
-                ok = rest_post(conn, auth, topic, batch)
+
+            # Collect batch
+            batch = []
+            for _ in range(batch_size):
+                row = next(iterator)
+                batch.append(format_reading(row))
+
+            # Send to AnyLog
+            ok = rest_put(conn, auth, batch, mode)
+
             if ok:
                 total_sent += len(batch)
                 batches_sent += 1
+                if batches_sent % 10 == 0:  # Progress every 10 batches
+                    elapsed = time.monotonic() - start
+                    actual_rate = total_sent / elapsed if elapsed > 0 else 0
+                    print(f"[Stream] Sent {total_sent:,} rows in {batches_sent} batches "
+                          f"({actual_rate:.1f} rows/sec)")
+
+            # Rate limiting
             elapsed = time.monotonic() - t0
-            sleep_time = interval - elapsed
+            sleep_time = batch_interval - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
+
     except KeyboardInterrupt:
         duration = time.monotonic() - start
         actual_rate = total_sent / duration if duration > 0 else 0
         print(f"\n[Stream] Stopped after {duration:.1f}s")
-        print(f"[Stream] Sent {total_sent} readings in {batches_sent} batches")
-        print(f"[Stream] Effective rate: {actual_rate:.0f} Hz")
+        print(f"[Stream] Sent {total_sent:,} rows in {batches_sent} batches")
+        print(f"[Stream] Effective rate: {actual_rate:.1f} rows/sec")
 
 
-# ---------------------------------------------------------------------------
+def send_batch(csv_path: str, conn: str, auth: tuple,
+               rows: int = 100, mode: str = "file"):
+    """
+    Send a single batch of rows from the dataset.
+
+    Args:
+        csv_path: Path to PowerGridSense CSV file
+        conn: AnyLog endpoint
+        auth: Optional authentication
+        rows: Number of rows to send
+        mode: AnyLog ingestion mode
+    """
+    data = load_dataset(csv_path)
+
+    # Take first N rows (or all if fewer than N)
+    batch_data = data[:rows]
+    batch = [format_reading(row) for row in batch_data]
+
+    print(f"\n[Send] Sending {len(batch)} rows to {conn}...")
+    ok = rest_put(conn, auth, batch, mode)
+
+    if ok:
+        print(f"[Send] Success — sent {len(batch)} rows")
+    else:
+        print(f"[Send] Failed to send data")
+        sys.exit(1)
+
+
+def print_sample(csv_path: str, rows: int = 5):
+    """Print sample rows from the dataset as JSON."""
+    data = load_dataset(csv_path)
+    sample_data = data[:rows]
+    sample = [format_reading(row) for row in sample_data]
+    print(json.dumps(sample, indent=2))
+
+
 # CLI
-# ---------------------------------------------------------------------------
 
 def parse_conn(value: str) -> tuple[str, tuple]:
     """Parse 'user:pass@host:port' or 'host:port' into (conn, auth)."""
@@ -339,79 +253,57 @@ def parse_conn(value: str) -> tuple[str, tuple]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="EADS Data Generator — push mock sensor data to AnyLog")
+        description="EADS Data Generator — Stream PowerGridSense dataset to AnyLog"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # -- rest-put --
-    p_put = sub.add_parser("rest-put", help="Push data via REST PUT")
-    p_put.add_argument("--conn", default="127.0.0.1:32149",
+    # stream
+    p_stream = sub.add_parser("stream",
+                             help="Stream dataset continuously (loops at end)")
+    p_stream.add_argument("--csv", required=True,
+                         help="Path to PowerGridSense CSV file")
+    p_stream.add_argument("--conn", default="127.0.0.1:32149",
+                         help="AnyLog REST endpoint (host:port or user:pass@host:port)")
+    p_stream.add_argument("--batch-size", type=int, default=100,
+                         help="Number of rows per batch (default: 100)")
+    p_stream.add_argument("--rate", type=float, default=10.0,
+                         help="Batches per second (default: 10)")
+    p_stream.add_argument("--mode", choices=["streaming", "file"], default="file",
+                         help="AnyLog ingestion mode (default: file)")
+
+    # send
+    p_send = sub.add_parser("send",
+                           help="Send a single batch of rows")
+    p_send.add_argument("--csv", required=True,
+                       help="Path to PowerGridSense CSV file")
+    p_send.add_argument("--conn", default="127.0.0.1:32149",
                        help="AnyLog REST endpoint (host:port or user:pass@host:port)")
-    p_put.add_argument("--rows", type=int, default=1000,
-                       help="Number of readings to generate (one-shot) or batch size (continuous)")
-    p_put.add_argument("--hz", type=int, default=1000,
-                       help="Sample rate in Hz (default: 1000)")
-    p_put.add_argument("--mode", choices=["streaming", "file"], default="streaming",
-                       help="AnyLog ingestion mode")
-    p_put.add_argument("--continuous", action="store_true",
-                       help="Stream continuously instead of one-shot")
+    p_send.add_argument("--rows", type=int, default=100,
+                       help="Number of rows to send (default: 100)")
+    p_send.add_argument("--mode", choices=["streaming", "file"], default="file",
+                       help="AnyLog ingestion mode (default: file)")
 
-    # -- rest-post --
-    p_post = sub.add_parser("rest-post", help="Push data via REST POST (topic-based)")
-    p_post.add_argument("--conn", default="127.0.0.1:32149",
-                        help="AnyLog REST endpoint (host:port or user:pass@host:port)")
-    p_post.add_argument("--rows", type=int, default=1000,
-                        help="Number of readings to generate (one-shot) or batch size (continuous)")
-    p_post.add_argument("--hz", type=int, default=1000,
-                        help="Sample rate in Hz (default: 1000)")
-    p_post.add_argument("--topic", default="eads-sensors",
-                        help="MQTT topic name (must match AnyLog MQTT client config)")
-    p_post.add_argument("--continuous", action="store_true",
-                        help="Stream continuously instead of one-shot")
-
-    # -- grpc-serve --
-    p_grpc = sub.add_parser("grpc-serve",
-                            help="Start gRPC server (AnyLog connects as client)")
-    p_grpc.add_argument("--port", type=int, default=50051,
-                        help="Port for gRPC server")
-    p_grpc.add_argument("--rows", type=int, default=1000,
-                        help="Readings per request")
-    p_grpc.add_argument("--hz", type=int, default=1000,
-                        help="Sample rate in Hz (default: 1000)")
-
-    # -- sample --
-    p_sample = sub.add_parser("sample", help="Print sample data (no network)")
-    p_sample.add_argument("--rows", type=int, default=20,
-                          help="Number of sample readings")
-    p_sample.add_argument("--hz", type=int, default=1000,
-                          help="Sample rate in Hz (default: 1000)")
+    # sample
+    p_sample = sub.add_parser("sample",
+                             help="Print sample rows as JSON")
+    p_sample.add_argument("--csv", required=True,
+                         help="Path to PowerGridSense CSV file")
+    p_sample.add_argument("--rows", type=int, default=5,
+                         help="Number of rows to print (default: 5)")
 
     args = parser.parse_args()
 
-    if args.command == "sample":
-        batch = generate_batch(args.rows, args.hz)
-        print(json.dumps(batch, indent=2))
-        return
-
-    if args.command == "rest-put":
+    if args.command == "stream":
         conn, auth = parse_conn(args.conn)
-        if args.continuous:
-            stream_continuous(conn, auth, "put", "", args.hz, args.rows,
-                              args.mode)
-        else:
-            batch = generate_batch(args.rows, args.hz)
-            rest_put(conn, auth, batch, args.mode)
+        stream_continuous(args.csv, conn, auth, args.batch_size,
+                        args.rate, args.mode)
 
-    elif args.command == "rest-post":
+    elif args.command == "send":
         conn, auth = parse_conn(args.conn)
-        if args.continuous:
-            stream_continuous(conn, auth, "post", args.topic,
-                              args.hz, args.rows)
-        else:
-            batch = generate_batch(args.rows, args.hz)
-            rest_post(conn, auth, args.topic, batch)
+        send_batch(args.csv, conn, auth, args.rows, args.mode)
 
-    elif args.command == "grpc-serve":
-        run_grpc_server(args.port, args.rows, args.hz)
+    elif args.command == "sample":
+        print_sample(args.csv, args.rows)
 
 
 if __name__ == "__main__":

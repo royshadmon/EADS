@@ -46,12 +46,7 @@ python eads_data_generator.py send --csv power_system_multiclass_anomaly_data.cs
 Stream the dataset continuously at 8000 rows/sec (loops back to start when reaching end):
 
 ```bash
-python eads_data_generator.py stream \
-  --csv power_system_multiclass_anomaly_data.csv \
-  --conn 127.0.0.1:32149 \
-  --batch-size 400 \
-  --rate 20 \
-  --mode file
+python eads_data_generator.py stream --csv power_system_multiclass_anomaly_data.csv --conn 127.0.0.1:32149 --batch-size 400 --rate 20 --mode file
 ```
 
 **Parameters:**

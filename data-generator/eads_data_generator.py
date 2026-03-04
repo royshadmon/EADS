@@ -17,13 +17,13 @@ Fields in dataset:
 
 Usage:
     # Stream dataset continuously (loops when reaching end)
-    python eads_data_generator.py stream --csv powergridsense.csv --conn 127.0.0.1:32149
+    python eads_data_generator.py stream --csv power_system_multiclass_anomaly_data.csv --conn 127.0.0.1:32149
 
     # Send one batch of data
-    python eads_data_generator.py send --csv powergridsense.csv --conn 127.0.0.1:32149 --rows 100
+    python eads_data_generator.py send --csv power_system_multiclass_anomaly_data.csv --conn 127.0.0.1:32149 --rows 100
 
     # Print sample from dataset
-    python eads_data_generator.py sample --csv powergridsense.csv --rows 5
+    python eads_data_generator.py sample --csv power_system_multiclass_anomaly_data.csv --rows 5
 """
 
 import argparse
@@ -32,6 +32,7 @@ import json
 import sys
 import time
 from typing import Iterator
+from datetime import datetime, timezone
 
 import requests
 
@@ -77,10 +78,11 @@ def format_reading(row: dict) -> dict:
     Convert CSV row to JSON format for AnyLog.
     Preserves all fields from the dataset.
     """
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     # The CSV row is already a dict with string values
     # Send it as-is, letting AnyLog handle type conversion based on its schema
     return {
-        "timestamp": row.get("Timestamp", ""),
+        "timestamp": now,
         "sensor_id": row.get("Sensor_ID", ""),
         "voltage": row.get("Voltage (V)", ""),
         "current": row.get("Current (A)", ""),

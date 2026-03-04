@@ -23,8 +23,7 @@ status:
 	@echo "--- Generator 3 ---" && curl -s http://localhost:8003/status | python3 -m json.tool 2>/dev/null || echo "not reachable"
 
 # ---- Run locally (no Docker) ----
-# Requires the original generator files in the same directory.
 # Override env vars as needed, e.g.:
-#   ANYLOG_CONN=127.0.0.1:32149 SENSOR_ID=EADS-V-001 make run-local
+#   ANYLOG_CONN=127.0.0.1:32149 CSV_PATH=./power_system_multiclass_anomaly_data.csv make run-local
 run-local:
 	PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

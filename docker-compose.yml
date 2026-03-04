@@ -3,10 +3,11 @@ version: "3.9"
 # ---------------------------------------------------------------
 # EADS Data Generators
 #
-# Each service wraps eads_data_generator.py in a FastAPI container
-# targeting a different AnyLog operator.
+# Each service streams the PowerGridSense CSV dataset to a
+# different AnyLog operator via REST PUT.
 #
-# To add a new generator: copy a service block and change env vars.
+# To add a new generator: copy a service block and change
+# ANYLOG_CONN and the ports mapping.
 # ---------------------------------------------------------------
 
 services:
@@ -15,17 +16,11 @@ services:
     build: .
     container_name: eads-generator-1
     environment:
-      SENSOR_ID: EADS-V-001
-      SENSOR_LAT: 32.7157
-      SENSOR_LON: -117.1611
-      SENSOR_RMS_VOLTAGE: 120.0
-      ANYLOG_CONN: anylog-operator-1:32149
-      ANYLOG_DBMS: eads
-      ANYLOG_TABLE: voltage_readings
-      METHOD: rest-put            # rest-put | rest-post | grpc-serve
-      ANYLOG_MODE: streaming      # streaming | file
-      SAMPLE_RATE_HZ: 1000
-      BATCH_SIZE: 1000
+      ANYLOG_CONN: anylog-operator1:32149
+      ANYLOG_MODE: file             # "file" (immediate) or "streaming" (buffered)
+      CSV_PATH: /data/power_system_multiclass_anomaly_data.csv
+      BATCH_SIZE: 400
+      RATE_HZ: 20                   # 400 * 20 = 8000 rows/sec (8 kHz)
     ports:
       - "8001:8000"
     restart: unless-stopped
@@ -38,17 +33,11 @@ services:
     build: .
     container_name: eads-generator-2
     environment:
-      SENSOR_ID: EADS-V-002
-      SENSOR_LAT: 32.7300
-      SENSOR_LON: -117.1500
-      SENSOR_RMS_VOLTAGE: 240.0
-      ANYLOG_CONN: anylog-operator-2:32149
-      ANYLOG_DBMS: eads
-      ANYLOG_TABLE: voltage_readings
-      METHOD: rest-put
-      ANYLOG_MODE: streaming
-      SAMPLE_RATE_HZ: 1000
-      BATCH_SIZE: 1000
+      ANYLOG_CONN: anylog-operator2:32249
+      ANYLOG_MODE: file
+      CSV_PATH: /data/power_system_multiclass_anomaly_data.csv
+      BATCH_SIZE: 400
+      RATE_HZ: 20
     ports:
       - "8002:8000"
     restart: unless-stopped
@@ -58,17 +47,11 @@ services:
     build: .
     container_name: eads-generator-3
     environment:
-      SENSOR_ID: EADS-V-003
-      SENSOR_LAT: 32.7050
-      SENSOR_LON: -117.1700
-      SENSOR_RMS_VOLTAGE: 480.0
-      ANYLOG_CONN: anylog-operator-3:32149
-      ANYLOG_DBMS: eads
-      ANYLOG_TABLE: voltage_readings
-      METHOD: rest-put
-      ANYLOG_MODE: streaming
-      SAMPLE_RATE_HZ: 1000
-      BATCH_SIZE: 1000
+      ANYLOG_CONN: anylog-operator3:32349
+      ANYLOG_MODE: file
+      CSV_PATH: /data/power_system_multiclass_anomaly_data.csv
+      BATCH_SIZE: 400
+      RATE_HZ: 20
     ports:
       - "8003:8000"
     restart: unless-stopped
@@ -77,3 +60,4 @@ services:
 # networks:
 #   anylog_default:
 #     external: true
+#     name: docker-compose-files_default

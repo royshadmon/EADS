@@ -5,12 +5,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the original generator module + proto/gRPC stubs into /app
-# so `import eads_data_generator` works from the FastAPI code
+# Copy the original generator module
 COPY eads_data_generator.py .
-COPY sensor_data.proto .
-COPY sensor_data_pb2.py .
-COPY sensor_data_pb2_grpc.py .
+
+# Copy the dataset into /data (matches default CSV_PATH)
+COPY power_system_multiclass_anomaly_data.csv /data/
 
 # Copy the FastAPI wrapper
 COPY app/ ./app/

@@ -4,7 +4,7 @@ Predicts sensor voltage 5 seconds into the future using lag features.
 
 Workflow:
   1. TRAIN  — fetch historical data from AnyLog, build lag features, fit model
-  2. INFER  — every second, query recent readings, predict t+5s, PUT back to AnyLog
+  2. INFER  — every 0.5s, query recent readings, predict t+5s, PUT back to AnyLog
 
 Predictions are written to: eads.voltage_predictions
 
@@ -27,7 +27,7 @@ import json
 import pickle
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -45,7 +45,7 @@ SOURCE_TABLE  = "grid_readings"
 PRED_TABLE    = "voltage_predictions"
 HORIZON_SECS  = 5        # predict voltage this many seconds ahead
 DEFAULT_LAGS  = 10       # number of lag readings used as features
-INFER_HZ      = 1.0      # inference runs per second
+INFER_HZ      = 2.0      # runs every 0.5 seconds
 MODEL_PATH    = Path("eads_voltage_model.pkl")
 
 # ── AnyLog REST helpers ────────────────────────────────────────────────────────
@@ -255,14 +255,17 @@ def load_model() -> tuple:
 def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
     """
     Continuously query recent readings, predict voltage t+5s,
-    and write predictions back to AnyLog.
+    and write predictions back to AnyLog every 0.5 seconds.
+
+    Prediction timestamp = now + HORIZON_SECS so it aligns directly
+    with the actual reading in grid_readings at that future timestamp.
     """
     feature_cols = get_feature_cols(n_lags)
     # Fetch a window of readings wide enough to build lag features
     window_secs = n_lags + HORIZON_SECS + 10  # extra buffer
 
     print(f"\n{'='*60}")
-    print(f"[Infer] Starting inference loop ({INFER_HZ} Hz)")
+    print(f"[Infer] Starting inference loop ({INFER_HZ} Hz — every 0.5s)")
     print(f"[Infer] Reading from : {DBMS}.{SOURCE_TABLE}")
     print(f"[Infer] Writing to   : {DBMS}.{PRED_TABLE}")
     print(f"[Infer] Horizon      : {HORIZON_SECS} seconds ahead")
@@ -297,6 +300,9 @@ def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
 
             predictions = []
             now_utc = datetime.now(timezone.utc)
+            # Timestamp stored as now + 5s so it matches the actual reading
+            # that will arrive in grid_readings at that future time
+            predicted_time = now_utc + timedelta(seconds=HORIZON_SECS)
 
             for sensor_id, grp in df.groupby("sensor_id"):
                 grp = grp.reset_index(drop=True)
@@ -317,7 +323,7 @@ def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
                 predicted_v = float(np.clip(predicted_v, 0.0, 1000.0))
 
                 predictions.append({
-                    "timestamp": now_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                    "timestamp": predicted_time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                     "sensor_id": str(sensor_id).strip(),
                     "predicted_voltage": round(predicted_v, 4),
                     "horizon_seconds": HORIZON_SECS,
@@ -372,8 +378,8 @@ def main():
 
     # Shared args factory
     def add_common(p):
-        p.add_argument("--conn", default="127.0.0.1:32449",
-                       help="AnyLog REST endpoint (default: 127.0.0.1:32449)")
+        p.add_argument("--conn", default="127.0.0.1:32149",
+                       help="AnyLog REST endpoint (default: 127.0.0.1:32149)")
         p.add_argument("--lags", type=int, default=DEFAULT_LAGS,
                        help=f"Number of lag readings used as features (default: {DEFAULT_LAGS})")
 

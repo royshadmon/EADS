@@ -64,9 +64,7 @@ python eads_data_generator.py stream \
 
 ### 2. Train then run inference
 ```bash
-python eads_voltage_predictor.py run \
-  --conn 127.0.0.1:32149 \
-  --train-hours 1
+python eads_voltage_predictor.py run --conn 127.0.0.1:32149  --train-hours 1
 ```
 
 ### 3. Train only (saves model to disk)

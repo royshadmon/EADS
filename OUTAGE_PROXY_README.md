@@ -9,12 +9,20 @@ the terminal — without touching the generator or AnyLog configuration.
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- The following files from the EADS project must be present in the same directory:
+- This branch requires files from the fastapi branch. Before using this branch,
+  merge from fastapi to ensure the following are present:
+
+  ```bash
+  git merge fastapi
+  ```
+
+  This will bring in:
   - `eads_data_generator.py`
   - `app/` (FastAPI wrapper)
   - `Dockerfile` (generator image)
   - `requirements.txt` (generator deps)
   - `power_system_multiclass_anomaly_data.csv`
+
 - Three AnyLog operator nodes must already be running and reachable on:
   - `:32149` (operator 1)
   - `:32249` (operator 2)

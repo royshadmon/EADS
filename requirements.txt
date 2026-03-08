@@ -1,7 +1,0 @@
-# --- Original eads_data_generator.py deps ---
-requests>=2.28.0
-
-# --- FastAPI container deps ---
-fastapi>=0.110,<1
-uvicorn[standard]>=0.29,<1
-pydantic-settings>=2.2,<3

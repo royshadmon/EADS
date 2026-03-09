@@ -27,6 +27,7 @@ import json
 import pickle
 import sys
 import time
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -43,9 +44,9 @@ from sklearn.preprocessing import StandardScaler
 DBMS          = "eads"
 SOURCE_TABLE  = "grid_readings"
 PRED_TABLE    = "voltage_predictions"
-HORIZON_SECS  = 5        # predict voltage this many seconds ahead
-DEFAULT_LAGS  = 10       # number of lag readings used as features
-INFER_HZ      = 2.0      # runs every 0.5 seconds
+HORIZON_SECS  = 5
+DEFAULT_LAGS  = 100
+INFER_HZ      = 100.0
 MODEL_PATH    = Path("eads_voltage_model.pkl")
 
 # ── AnyLog REST helpers ────────────────────────────────────────────────────────
@@ -253,74 +254,76 @@ def load_model() -> tuple:
 # ── Inference Loop ─────────────────────────────────────────────────────────────
 
 def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
-    """
-    Continuously query recent readings, predict voltage t+5s,
-    and write predictions back to AnyLog every 0.5 seconds.
-
-    Prediction timestamp = now + HORIZON_SECS so it aligns directly
-    with the actual reading in grid_readings at that future timestamp.
-    """
     feature_cols = get_feature_cols(n_lags)
-    # Fetch a window of readings wide enough to build lag features
-    window_secs = n_lags + HORIZON_SECS + 10  # extra buffer
+    window_secs = 60
+    fetch_limit = 5000
+
+    latest_df: dict = {"data": None, "lock": threading.Lock()}
+
+    def fetch_thread():
+        sql = (
+            f"SELECT timestamp, sensor_id, voltage "
+            f"FROM {SOURCE_TABLE} "
+            f"WHERE timestamp >= NOW() - {window_secs} seconds "
+            f"ORDER BY sensor_id, timestamp "
+            f"LIMIT {fetch_limit}"
+        )
+        while True:
+            t0 = time.monotonic()
+            df = anylog_query(conn, sql, auth)
+            if df is not None and not df.empty:
+                df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+                df = df.sort_values(["sensor_id", "timestamp"])
+                df["voltage"] = pd.to_numeric(df["voltage"], errors="coerce")
+                with latest_df["lock"]:
+                    latest_df["data"] = df
+            sleep_t = 0.5 - (time.monotonic() - t0)
+            if sleep_t > 0:
+                time.sleep(sleep_t)
 
     print(f"\n{'='*60}")
-    print(f"[Infer] Starting inference loop ({INFER_HZ} Hz — every 0.5s)")
+    print(f"[Infer] Starting inference loop ({INFER_HZ} Hz — every 100ms)")
     print(f"[Infer] Reading from : {DBMS}.{SOURCE_TABLE}")
     print(f"[Infer] Writing to   : {DBMS}.{PRED_TABLE}")
     print(f"[Infer] Horizon      : {HORIZON_SECS} seconds ahead")
     print(f"[Infer] Press Ctrl+C to stop\n")
 
+    t = threading.Thread(target=fetch_thread, daemon=True)
+    t.start()
+
+    print("[Infer] Waiting for first data fetch...")
+    while latest_df["data"] is None:
+        time.sleep(0.1)
+    print("[Infer] Data ready — starting predictions\n")
+
     total_predictions = 0
     total_errors = 0
+    interval = 1.0 / INFER_HZ
 
     try:
         while True:
             t0 = time.monotonic()
 
-            # ── 1. Fetch recent data ──────────────────────────────────────
-            sql = (
-                f"SELECT timestamp, sensor_id, voltage "
-                f"FROM {SOURCE_TABLE} "
-                f"WHERE timestamp >= NOW() - {window_secs} seconds "
-                f"ORDER BY sensor_id, timestamp "
-                f"LIMIT 10000"
-            )
-            df = anylog_query(conn, sql, auth)
+            with latest_df["lock"]:
+                df = latest_df["data"].copy() if latest_df["data"] is not None else None
 
             if df is None or df.empty:
-                print(f"[Infer] No recent data — waiting...")
-                time.sleep(1.0 / INFER_HZ)
+                time.sleep(interval)
                 continue
-
-            # ── 2. Build features ─────────────────────────────────────────
-            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-            df = df.sort_values(["sensor_id", "timestamp"])
-            df["voltage"] = pd.to_numeric(df["voltage"], errors="coerce")
 
             predictions = []
             now_utc = datetime.now(timezone.utc)
-            # Timestamp stored as now + 5s so it matches the actual reading
-            # that will arrive in grid_readings at that future time
             predicted_time = now_utc + timedelta(seconds=HORIZON_SECS)
 
             for sensor_id, grp in df.groupby("sensor_id"):
                 grp = grp.reset_index(drop=True)
-
-                if len(grp) < n_lags + 1:
-                    continue  # not enough history for this sensor yet
-
-                # Use the most recent n_lags readings as features
                 recent_voltages = grp["voltage"].dropna().values
                 if len(recent_voltages) < n_lags:
                     continue
 
-                lag_values = recent_voltages[-n_lags:][::-1]  # lag_1 = most recent
+                lag_values = recent_voltages[-n_lags:][::-1]
                 X = scaler.transform([lag_values])
-                predicted_v = float(model.predict(X)[0])
-
-                # Clamp to physically plausible range (typical grid: 100–500 V)
-                predicted_v = float(np.clip(predicted_v, 0.0, 1000.0))
+                predicted_v = float(np.clip(model.predict(X)[0], 0.0, 1000.0))
 
                 predictions.append({
                     "timestamp": predicted_time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
@@ -331,24 +334,17 @@ def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
                     "model": "linear_regression",
                 })
 
-            # ── 3. Write predictions to AnyLog ────────────────────────────
             if predictions:
                 ok = anylog_put(conn, predictions, auth)
                 if ok:
                     total_predictions += len(predictions)
-                    print(f"[Infer] {now_utc.strftime('%H:%M:%S')} — "
-                          f"predicted {len(predictions)} sensor(s) | "
-                          f"total: {total_predictions:,}")
+                    if total_predictions % 50 == 0:
+                        print(f"[Infer] {now_utc.strftime('%H:%M:%S')} — "
+                              f"{len(predictions)} sensor(s) | total: {total_predictions:,}")
                 else:
                     total_errors += 1
-                    if total_errors % 10 == 1:
-                        print(f"[Infer] Warning: {total_errors} failed PUT(s) so far")
-            else:
-                print(f"[Infer] No predictions this cycle (insufficient lag data)")
 
-            # ── 4. Rate limit ─────────────────────────────────────────────
-            elapsed = time.monotonic() - t0
-            sleep_t = (1.0 / INFER_HZ) - elapsed
+            sleep_t = interval - (time.monotonic() - t0)
             if sleep_t > 0:
                 time.sleep(sleep_t)
 
@@ -356,7 +352,6 @@ def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
         print(f"\n[Infer] Stopped.")
         print(f"[Infer] Total predictions written : {total_predictions:,}")
         print(f"[Infer] Total PUT failures        : {total_errors}")
-
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def parse_conn(value: str) -> tuple[str, tuple]:

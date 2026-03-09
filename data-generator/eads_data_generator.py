@@ -32,7 +32,7 @@ import json
 import sys
 import time
 from typing import Iterator
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import requests
 
@@ -73,12 +73,12 @@ def dataset_iterator(data: list[dict]) -> Iterator[dict]:
             yield row
 
 
-def format_reading(row: dict) -> dict:
+def format_reading(row: dict, offset_ms: int = 0) -> dict:
     """
     Convert CSV row to JSON format for AnyLog.
     Preserves all fields from the dataset.
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    now = (datetime.now(timezone.utc) + timedelta(milliseconds=offset_ms)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     # The CSV row is already a dict with string values
     # Send it as-is, letting AnyLog handle type conversion based on its schema
     return {
@@ -173,9 +173,9 @@ def stream_continuous(csv_path: str, conn: str, auth: tuple,
 
             # Collect batch
             batch = []
-            for _ in range(batch_size):
+            for i in range(batch_size):
                 row = next(iterator)
-                batch.append(format_reading(row))
+                batch.append(format_reading(row, offset_ms=i * 10))
 
             # Send to AnyLog
             ok = rest_put(conn, auth, batch, mode)

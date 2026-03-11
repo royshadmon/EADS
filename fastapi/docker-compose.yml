@@ -1,0 +1,57 @@
+version: "3.9"
+
+# ---------------------------------------------------------------
+# EADS Data Generators (Sprint 2)
+#
+# Each service streams the PowerGridSense CSV dataset to a
+# different AnyLog operator via REST PUT.
+#
+# Operators use host networking, so generators do too.
+# FastAPI status endpoints are on ports 8001/8002/8003.
+# ---------------------------------------------------------------
+
+services:
+  # ---------- Generator for Operator 1 ----------
+  generator-1:
+    build: .
+    container_name: eads-generator-1
+    network_mode: host
+    environment:
+      ANYLOG_CONN: 127.0.0.1:32149 # generator-1
+      ANYLOG_MODE: file
+      CSV_PATH: /data/power_system_multiclass_anomaly_data.csv
+      BATCH_SIZE: 100
+      RATE_HZ: 10
+      UVICORN_PORT: 8001
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001
+
+  # ---------- Generator for Operator 2 ----------
+  generator-2:
+    build: .
+    container_name: eads-generator-2
+    network_mode: host
+    environment:
+      ANYLOG_CONN: 127.0.0.1:32249 # generator-2
+      ANYLOG_MODE: file
+      CSV_PATH: /data/power_system_multiclass_anomaly_data.csv
+      BATCH_SIZE: 100
+      RATE_HZ: 10
+      UVICORN_PORT: 8002
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8002
+
+  # ---------- Generator for Operator 3 ----------
+  generator-3:
+    build: .
+    container_name: eads-generator-3
+    network_mode: host
+    environment:
+      ANYLOG_CONN: 127.0.0.1:32349 # generator-3
+      ANYLOG_MODE: file
+      CSV_PATH: /data/power_system_multiclass_anomaly_data.csv
+      BATCH_SIZE: 100
+      RATE_HZ: 10
+      UVICORN_PORT: 8003
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003

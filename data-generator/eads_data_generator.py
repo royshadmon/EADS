@@ -17,13 +17,13 @@ Fields in dataset:
 
 Usage:
     # Stream dataset continuously (loops when reaching end)
-    python eads_data_generator.py stream --csv power_system_multiclass_anomaly_data.csv --conn 127.0.0.1:32149
+    python eads_data_generator.py stream --csv powergridsense.csv --conn 127.0.0.1:32149
 
     # Send one batch of data
-    python eads_data_generator.py send --csv power_system_multiclass_anomaly_data.csv --conn 127.0.0.1:32149 --rows 100
+    python eads_data_generator.py send --csv powergridsense.csv --conn 127.0.0.1:32149 --rows 100
 
     # Print sample from dataset
-    python eads_data_generator.py sample --csv power_system_multiclass_anomaly_data.csv --rows 5
+    python eads_data_generator.py sample --csv powergridsense.csv --rows 5
 """
 
 import argparse
@@ -31,8 +31,8 @@ import csv
 import json
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Iterator
-from datetime import datetime, timezone, timedelta
 
 import requests
 
@@ -73,16 +73,29 @@ def dataset_iterator(data: list[dict]) -> Iterator[dict]:
             yield row
 
 
-def format_reading(row: dict, offset_ms: int = 0) -> dict:
+def format_reading(row: dict, use_real_time: bool = True,
+                   timestamp_override: str = None) -> dict:
     """
     Convert CSV row to JSON format for AnyLog.
     Preserves all fields from the dataset.
+
+    Args:
+        row: CSV row dict
+        use_real_time: If True, use current timestamp instead of dataset timestamp
+        timestamp_override: Optional timestamp string to use (overrides use_real_time)
     """
-    now = (datetime.now(timezone.utc) + timedelta(milliseconds=offset_ms)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-    # The CSV row is already a dict with string values
-    # Send it as-is, letting AnyLog handle type conversion based on its schema
+    # Determine timestamp to use
+    if timestamp_override:
+        timestamp = timestamp_override
+    elif use_real_time:
+        # Use current time in ISO format
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    else:
+        # Use timestamp from dataset
+        timestamp = row.get("Timestamp", "")
+
     return {
-        "timestamp": now,
+        "timestamp": timestamp,
         "sensor_id": row.get("Sensor_ID", ""),
         "voltage": row.get("Voltage (V)", ""),
         "current": row.get("Current (A)", ""),
@@ -135,7 +148,7 @@ def rest_put(conn: str, auth: tuple, payload: list[dict],
 
 def stream_continuous(csv_path: str, conn: str, auth: tuple,
                      batch_size: int = 100, rate_hz: float = 10.0,
-                     mode: str = "file"):
+                     mode: str = "file", use_real_time: bool = True):
     """
     Continuously stream dataset in batches.
     Loops back to start when reaching end of dataset.
@@ -147,6 +160,7 @@ def stream_continuous(csv_path: str, conn: str, auth: tuple,
         batch_size: Number of rows per batch
         rate_hz: Target batches per second (not rows per second)
         mode: AnyLog ingestion mode ("file" or "streaming")
+        use_real_time: Use current timestamps instead of dataset timestamps
     """
     data = load_dataset(csv_path)
     iterator = dataset_iterator(data)
@@ -160,6 +174,7 @@ def stream_continuous(csv_path: str, conn: str, auth: tuple,
     print(f"  Batch rate: {rate_hz} batches/sec")
     print(f"  Effective: ~{rows_per_sec:.1f} rows/sec")
     print(f"  Mode: {mode}")
+    print(f"  Timestamps: {'Real-time (current)' if use_real_time else 'Dataset (historical)'}")
     print(f"  Target: {conn}")
     print(f"\n[Stream] Press Ctrl+C to stop\n")
 
@@ -173,9 +188,9 @@ def stream_continuous(csv_path: str, conn: str, auth: tuple,
 
             # Collect batch
             batch = []
-            for i in range(batch_size):
+            for _ in range(batch_size):
                 row = next(iterator)
-                batch.append(format_reading(row, offset_ms=i * 10))
+                batch.append(format_reading(row, use_real_time=use_real_time))
 
             # Send to AnyLog
             ok = rest_put(conn, auth, batch, mode)
@@ -204,7 +219,7 @@ def stream_continuous(csv_path: str, conn: str, auth: tuple,
 
 
 def send_batch(csv_path: str, conn: str, auth: tuple,
-               rows: int = 100, mode: str = "file"):
+               rows: int = 100, mode: str = "file", use_real_time: bool = True):
     """
     Send a single batch of rows from the dataset.
 
@@ -214,14 +229,16 @@ def send_batch(csv_path: str, conn: str, auth: tuple,
         auth: Optional authentication
         rows: Number of rows to send
         mode: AnyLog ingestion mode
+        use_real_time: Use current timestamps instead of dataset timestamps
     """
     data = load_dataset(csv_path)
 
     # Take first N rows (or all if fewer than N)
     batch_data = data[:rows]
-    batch = [format_reading(row) for row in batch_data]
+    batch = [format_reading(row, use_real_time=use_real_time) for row in batch_data]
 
     print(f"\n[Send] Sending {len(batch)} rows to {conn}...")
+    print(f"[Send] Timestamps: {'Real-time (current)' if use_real_time else 'Dataset (historical)'}")
     ok = rest_put(conn, auth, batch, mode)
 
     if ok:
@@ -231,11 +248,12 @@ def send_batch(csv_path: str, conn: str, auth: tuple,
         sys.exit(1)
 
 
-def print_sample(csv_path: str, rows: int = 5):
+def print_sample(csv_path: str, rows: int = 5, use_real_time: bool = True):
     """Print sample rows from the dataset as JSON."""
     data = load_dataset(csv_path)
     sample_data = data[:rows]
-    sample = [format_reading(row) for row in sample_data]
+    sample = [format_reading(row, use_real_time=use_real_time) for row in sample_data]
+    print(f"# Timestamps: {'Real-time (current)' if use_real_time else 'Dataset (historical)'}")
     print(json.dumps(sample, indent=2))
 
 
@@ -272,6 +290,8 @@ def main():
                          help="Batches per second (default: 10)")
     p_stream.add_argument("--mode", choices=["streaming", "file"], default="file",
                          help="AnyLog ingestion mode (default: file)")
+    p_stream.add_argument("--use-dataset-time", action="store_true",
+                         help="Use timestamps from dataset instead of current time (default: use current time)")
 
     # send
     p_send = sub.add_parser("send",
@@ -284,6 +304,8 @@ def main():
                        help="Number of rows to send (default: 100)")
     p_send.add_argument("--mode", choices=["streaming", "file"], default="file",
                        help="AnyLog ingestion mode (default: file)")
+    p_send.add_argument("--use-dataset-time", action="store_true",
+                       help="Use timestamps from dataset instead of current time (default: use current time)")
 
     # sample
     p_sample = sub.add_parser("sample",
@@ -292,20 +314,25 @@ def main():
                          help="Path to PowerGridSense CSV file")
     p_sample.add_argument("--rows", type=int, default=5,
                          help="Number of rows to print (default: 5)")
+    p_sample.add_argument("--use-dataset-time", action="store_true",
+                         help="Use timestamps from dataset instead of current time (default: use current time)")
 
     args = parser.parse_args()
 
     if args.command == "stream":
         conn, auth = parse_conn(args.conn)
+        use_real_time = not args.use_dataset_time  # Invert the flag
         stream_continuous(args.csv, conn, auth, args.batch_size,
-                        args.rate, args.mode)
+                        args.rate, args.mode, use_real_time)
 
     elif args.command == "send":
         conn, auth = parse_conn(args.conn)
-        send_batch(args.csv, conn, auth, args.rows, args.mode)
+        use_real_time = not args.use_dataset_time  # Invert the flag
+        send_batch(args.csv, conn, auth, args.rows, args.mode, use_real_time)
 
     elif args.command == "sample":
-        print_sample(args.csv, args.rows)
+        use_real_time = not args.use_dataset_time  # Invert the flag
+        print_sample(args.csv, args.rows, use_real_time)
 
 
 if __name__ == "__main__":

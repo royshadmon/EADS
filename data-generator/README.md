@@ -1,4 +1,4 @@
-# EADS Data Generator - Sprint 2
+# EADS Data Generator
 
 Streams the PowerGridSense dataset to AnyLog via REST PUT.
 
@@ -96,15 +96,3 @@ docker exec postgres1 psql -U demo -d eads -c "SELECT COUNT(*) FROM par_grid_rea
 # View sample data
 docker exec postgres1 psql -U demo -d eads -c "SELECT timestamp, sensor_id, voltage, current, power, frequency FROM par_grid_readings_2026_02_01_d14_insert_timestamp ORDER BY timestamp DESC LIMIT 10;"
 ```
-
-## Changes from Sprint 1
-
-- Removed mock AC sine wave generation
-- Removed gRPC support
-- Removed REST POST/MQTT topic mapping
-- Added real PowerGridSense dataset (10,000 rows from Kaggle)
-- Added continuous streaming with infinite loop
-- Included all 9 dataset fields (timestamp, sensor_id, voltage, current, power, frequency, power_factor, location, anomaly_label)
-- Simplified to REST PUT only
-- Changed table name from `voltage_readings` to `grid_readings`
-- Configured for 8 kHz streaming (8000 rows/sec)

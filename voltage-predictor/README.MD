@@ -14,6 +14,12 @@ The predictor uses a lag-based supervised learning approach:
 - It continuously performs inference on live data
 - It writes predictions to `eads.voltage_predictions`
 
+## Usage
+
+Train on last 24 hours of data, then run inference loop:
+```bash
+python eads_voltage_predictor.py run --conn 127.0.0.1:32149
+```
 ## Functional Flow
 
 1. **Training**

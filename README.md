@@ -72,7 +72,9 @@ Streams PowerGridSense dataset to AnyLog operators.
 *To be integrated - multi-node visualization*
 
 ### Voltage Predictor
-*To be integrated - ML anomaly detection*
+Predicts Future Voltages from recent readings and sends the predictions to Anylog
+- **Location:** `voltage-predictor/`
+- **Documentation:** See [voltage-predictor/README.md](voltage-predictor/README.md) for detailed usage
 
 ---
 

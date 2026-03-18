@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.proxy.txt .
+RUN pip install --no-cache-dir -r requirements.proxy.txt
+
+# Only the proxy module is needed in this image
+COPY outage_proxy.py .
+
+EXPOSE 9000
+
+CMD ["uvicorn", "outage_proxy:app", "--host", "0.0.0.0", "--port", "9000"]

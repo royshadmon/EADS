@@ -26,4 +26,4 @@ status:
 # Override env vars as needed, e.g.:
 #   ANYLOG_CONN=127.0.0.1:9001 CSV_PATH=../data-generator/power_system_multiclass_anomaly_data.csv make run-local
 run-local:
-	PYTHONPATH=. uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	PYTHONPATH=../data-generator:. uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

@@ -68,7 +68,6 @@ Rows/sec = batch_size × rate
 Examples:
 - 400 rows × 20 batches/sec = **8000 rows/sec (8 kHz)**
 - 100 rows × 10 batches/sec = 1000 rows/sec (1 kHz)
-- 200 rows × 40 batches/sec = 8000 rows/sec (8 kHz)
 
 **Timestamps:**
 By default, the generator uses **current timestamps** (real-time mode) to simulate live sensor data. The dataset's historical timestamps (from May 2024) are replaced with the current date/time. To use the original dataset timestamps instead, add the `--use-dataset-time` flag.

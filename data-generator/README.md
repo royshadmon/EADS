@@ -89,9 +89,9 @@ curl -s "http://127.0.0.1:32149" -H 'command: sql eads format = table "select co
 **Verify directly in PostgreSQL:**
 
 ```bash
-# Note: Data goes into partitioned tables (par_grid_readings_*)
-docker exec postgres1 psql -U demo -d eads -c "SELECT COUNT(*) FROM par_grid_readings_2026_02_01_d14_insert_timestamp;"
+# Check row count
+docker exec postgres1 psql -U demo -d eads -c "SELECT COUNT(*) FROM grid_readings;"
 
 # View sample data
-docker exec postgres1 psql -U demo -d eads -c "SELECT timestamp, sensor_id, voltage, current, power, frequency FROM par_grid_readings_2026_02_01_d14_insert_timestamp ORDER BY timestamp DESC LIMIT 10;"
+docker exec postgres1 psql -U demo -d eads -c "SELECT timestamp, sensor_id, voltage, current, power, frequency FROM grid_readings ORDER BY timestamp DESC LIMIT 10;"
 ```

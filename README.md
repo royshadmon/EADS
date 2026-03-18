@@ -53,7 +53,7 @@ python eads_data_generator.py stream \
 
 ```bash
 # Watch row count
-watch -n 2 'docker exec postgres1 psql -U demo -d eads -c "SELECT COUNT(*) FROM par_grid_readings_2026_02_01_d14_insert_timestamp;"'
+watch -n 2 'docker exec postgres1 psql -U demo -d eads -c "SELECT COUNT(*) FROM grid_readings;"'
 ```
 
 ---

@@ -17,9 +17,8 @@ Generator ──PUT──> Outage Proxy ──PUT──> AnyLog Operator
 
 - Docker and Docker Compose
 - Outage proxies running (see `../outage-simulator/`)
-- Data generator files in `../data-generator/`:
-  - `eads_data_generator.py`
-  - `power_system_multiclass_anomaly_data.csv`
+
+The data generator module (`eads_data_generator.py`) and dataset (`power_system_multiclass_anomaly_data.csv`) are automatically included from `../data-generator/` during the Docker build.
 
 ---
 
@@ -95,10 +94,8 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Copy generator module to this directory (or adjust PYTHONPATH)
-cp ../data-generator/eads_data_generator.py .
-
-# Run with custom config
+# Run with PYTHONPATH pointing to data-generator
+PYTHONPATH=../data-generator \
 ANYLOG_CONN=127.0.0.1:9001 \
 CSV_PATH=../data-generator/power_system_multiclass_anomaly_data.csv \
 make run-local
@@ -147,7 +144,3 @@ See `../outage-simulator/OUTAGE_PROXY_README.md` for details.
 **High error count in /status:**
 - Check if AnyLog operators are running
 - Verify proxy → AnyLog connectivity
-
-**Build fails on COPY:**
-- Ensure `../data-generator/eads_data_generator.py` exists
-- Ensure `../data-generator/power_system_multiclass_anomaly_data.csv` exists

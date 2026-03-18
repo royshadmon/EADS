@@ -66,10 +66,13 @@ Streams PowerGridSense dataset to AnyLog operators.
 - **Documentation:** See [data-generator/README.md](data-generator/README.md) for detailed usage
 
 ### FastAPI Service
-*To be integrated - containerized data generator*
+Containerized data generators that stream through outage proxies to AnyLog operators. Runs 3 generators for multi-node setups.
+- **Location:** `fastapi-generator/`
+- **Documentation:** See [fastapi-generator/README.md](fastapi-generator/README.md) for detailed usage
 
 ### Grafana Dashboard
-*To be integrated - multi-node visualization*
+Multi-node visualization dashboard for monitoring all AnyLog operators.
+- **Location:** `grafana/`
 
 ### Voltage Predictor
 Predicts Future Voltages from recent readings and sends the predictions to Anylog

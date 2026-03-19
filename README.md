@@ -12,27 +12,9 @@ Real-time power grid sensor data streaming platform using AnyLog for distributed
 - Python 3.9+
 - PowerGridSense dataset ([download from Kaggle](https://www.kaggle.com/datasets/ziya07/powergridsense-dataset))
 
-### 1. Start PostgreSQL
+### 1. Make sure you have an instance of multi-node AnyLog running
 
-```bash
-cd ~/EADS/EdgeFL
-make up NAME=postgres1 HOST_PORT=5432 VOLUME=pgdata1
-```
-
-### 2. Start AnyLog Operator
-
-```bash
-cd ~/EADS/docker-compose/docker-makefiles/anylog-standalone
-docker-compose up -d
-```
-
-**Verify:**
-```bash
-curl -s "http://127.0.0.1:32149" -H "command: get status" -H "User-Agent: AnyLog/1.23"
-# Expected: anylog-standalone@<ip>:32148 running
-```
-
-### 3. Start Data Generator
+### 2. Start Data Generator
 
 ```bash
 cd data-generator

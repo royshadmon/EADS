@@ -15,7 +15,11 @@ The predictor uses a lag-based supervised learning approach:
 - It writes predictions to `eads.voltage_predictions`
 
 ## Usage
-
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 Train on last 24 hours of data, then run inference loop:
 ```bash
 python eads_voltage_predictor.py run --conn 127.0.0.1:32149
@@ -44,10 +48,3 @@ python eads_voltage_predictor.py run --conn 127.0.0.1:32149
 - **Configured horizon:** `5`
 - **Inference loop rate:** `100 Hz`
 - **Prediction output clamp:** `[0, 1000]`
-
-## Important Note on Horizon
-
-Although the code uses the variable name `HORIZON_SECS`, the training target is created with:
-
-```python
-grp["target_voltage"] = grp["voltage"].shift(-HORIZON_SECS)

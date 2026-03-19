@@ -93,11 +93,9 @@ curl http://127.0.0.1:8003/status
 
 ### 5. Start Grafana
 
-If this is your first time, create the `.env` file in the `grafana/` directory:
+If this is your first time, create the `.env` file in the `grafana/` directory containg the following:
 
 ```bash
-cd grafana
-cat > .env << 'EOF'
 GRAFANA_PORT=3000
 GF_ADMIN_USER=admin
 GF_ADMIN_PASSWORD=admin
@@ -119,7 +117,6 @@ PG3_PORT=5434
 PG3_DB=eads
 PG3_USER=demo
 PG3_PASSWORD=passwd
-EOF
 ```
 
 > **Note:** `host.docker.internal` allows the Grafana container to reach localhost services on macOS/Windows. On Linux, use the actual host IP or add `extra_hosts` to the compose file.

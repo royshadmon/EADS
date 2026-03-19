@@ -112,6 +112,3 @@ python eads_data_generator.py stream --csv <dataset> --conn node3:32149 --batch-
 **No data in database:**
 - Check partitioned tables: `docker exec postgres1 psql -U demo -d eads -c "\dt"`
 - Verify operator is running: `curl -s "http://127.0.0.1:32149" -H "command: get processes" -H "User-Agent: AnyLog/1.23"`
-
-**See [data-generator/README.md](data-generator/README.md) for detailed troubleshooting**
-

@@ -93,7 +93,7 @@ curl http://127.0.0.1:8003/status
 
 ### 5. Start Grafana
 
-If this is your first time, create the `.env` file in the `grafana/` directory containg the following:
+If this is your first time, create the `.env` file in the `grafana/` directory and input the following information:
 
 ```bash
 GRAFANA_PORT=3000

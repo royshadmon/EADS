@@ -70,6 +70,29 @@ Containerized data generators that stream through outage proxies to AnyLog opera
 - **Location:** `fastapi-generator/`
 - **Documentation:** See [fastapi-generator/README.md](fastapi-generator/README.md) for detailed usage
 
+### Outage Proxy
+Intercepts data between generators and AnyLog operators to simulate per-operator power outages in real time.
+- **Location:** `outage-proxy/`
+- **Documentation:** See [outage-proxy/README.md](outage-proxy/README.md) for detailed usage
+
+#### Quickstart
+```bash
+# Build and start
+docker compose up --build -d
+
+# Check all proxies are healthy
+./outage_cli.sh all status
+```
+
+#### CLI Commands
+```
+./outage_cli.sh <1|2|3|all> <start|stop|status|health>
+
+./outage_cli.sh 1 start       # trigger spike → outage on operator 1
+./outage_cli.sh 1 stop        # end outage, resume normal forwarding
+./outage_cli.sh all status    # check all proxies
+```
+
 ### Grafana Dashboard
 Multi-node visualization dashboard for monitoring all AnyLog operators.
 - **Location:** `grafana/`
@@ -109,3 +132,4 @@ python eads_data_generator.py stream --csv <dataset> --conn node3:32149 --batch-
 - Verify operator is running: `curl -s "http://127.0.0.1:32149" -H "command: get processes" -H "User-Agent: AnyLog/1.23"`
 
 **See [data-generator/README.md](data-generator/README.md) for detailed troubleshooting**
+

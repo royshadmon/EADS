@@ -1,31 +1,18 @@
 services:
   grafana:
     image: grafana/grafana:11.4.0
-    container_name: eads-grafana-multinode
+    container_name: eads-grafana-anylog
     restart: unless-stopped
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+    network_mode: host
     env_file:
       - .env
     environment:
       GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-admin}
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/eads-multinode-separate.json
-      PG1_HOST: ${PG1_HOST}
-      PG1_PORT: ${PG1_PORT}
-      PG1_DB: ${PG1_DB}
-      PG1_USER: ${PG1_USER}
-      PG1_PASSWORD: ${PG1_PASSWORD}
-      PG2_HOST: ${PG2_HOST}
-      PG2_PORT: ${PG2_PORT}
-      PG2_DB: ${PG2_DB}
-      PG2_USER: ${PG2_USER}
-      PG2_PASSWORD: ${PG2_PASSWORD}
-      PG3_HOST: ${PG3_HOST}
-      PG3_PORT: ${PG3_PORT}
-      PG3_DB: ${PG3_DB}
-      PG3_USER: ${PG3_USER}
-      PG3_PASSWORD: ${PG3_PASSWORD}
+      GF_INSTALL_PLUGINS: simpod-json-datasource
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/eads-anylog.json
+      ANYLOG_HOST: ${ANYLOG_HOST:-host.docker.internal}
+      ANYLOG_REST_PORT: ${ANYLOG_REST_PORT:-32149}
     volumes:
       - ./provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro

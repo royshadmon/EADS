@@ -62,7 +62,7 @@
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
           "unit": "volt"
         },
@@ -77,7 +77,9 @@
       "id": 70,
       "options": {
         "legend": {
-          "calcs": ["last"],
+          "calcs": [
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -92,7 +94,7 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"sql\",\n  \"dbms\": \"eads\",\n  \"sql\": \"SELECT timestamp, voltage FROM grid_readings WHERE [TIME_FILTER]\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\"\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"voltage\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
           "target": "grid_readings"
         }
@@ -116,7 +118,7 @@
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
           "unit": "amp"
         },
@@ -131,7 +133,9 @@
       "id": 71,
       "options": {
         "legend": {
-          "calcs": ["last"],
+          "calcs": [
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -146,7 +150,7 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"sql\",\n  \"dbms\": \"eads\",\n  \"sql\": \"SELECT timestamp, current FROM grid_readings WHERE [TIME_FILTER]\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\"\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"current\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
           "target": "grid_readings"
         }
@@ -170,7 +174,7 @@
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
           "unit": "kwatt"
         },
@@ -185,7 +189,9 @@
       "id": 72,
       "options": {
         "legend": {
-          "calcs": ["last"],
+          "calcs": [
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -200,7 +206,7 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"sql\",\n  \"dbms\": \"eads\",\n  \"sql\": \"SELECT timestamp, power FROM grid_readings WHERE [TIME_FILTER]\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\"\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"power\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
           "target": "grid_readings"
         }
@@ -224,7 +230,7 @@
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
           "unit": "hertz"
         },
@@ -239,7 +245,9 @@
       "id": 73,
       "options": {
         "legend": {
-          "calcs": ["last"],
+          "calcs": [
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -254,7 +262,7 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"sql\",\n  \"dbms\": \"eads\",\n  \"sql\": \"SELECT timestamp, frequency FROM grid_readings WHERE [TIME_FILTER]\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\"\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"frequency\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
           "target": "grid_readings"
         }
@@ -278,7 +286,7 @@
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "showPoints": "never",
-            "spanNulls": true
+            "spanNulls": false
           },
           "unit": "short"
         },
@@ -293,7 +301,9 @@
       "id": 74,
       "options": {
         "legend": {
-          "calcs": ["last"],
+          "calcs": [
+            "last"
+          ],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -308,7 +318,7 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"sql\",\n  \"dbms\": \"eads\",\n  \"sql\": \"SELECT timestamp, anomaly_label FROM grid_readings WHERE [TIME_FILTER]\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\"\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"anomaly_label\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
           "target": "grid_readings"
         }
@@ -320,7 +330,11 @@
   "preload": false,
   "refresh": "5s",
   "schemaVersion": 40,
-  "tags": ["eads", "anylog", "distributed"],
+  "tags": [
+    "eads",
+    "anylog",
+    "distributed"
+  ],
   "templating": {
     "list": []
   },
@@ -329,7 +343,13 @@
     "to": "now"
   },
   "timepicker": {
-    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
   },
   "timezone": "browser",
   "title": "EADS Control Plane (AnyLog Network)",

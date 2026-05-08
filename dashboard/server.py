@@ -28,17 +28,20 @@ def index():
 @app.route("/api/waveform")
 def waveform():
     rows = anylog_query(
-        f"SELECT timestamp, voltage_est FROM {TABLE} ORDER BY timestamp DESC LIMIT 1000"
+        f"SELECT timestamp, timestamp_us, voltage_est FROM {TABLE} "
+        f"ORDER BY timestamp DESC LIMIT 1000"
     )
-    return jsonify(list(reversed(rows)))
+    rows.sort(key=lambda r: r["timestamp_us"])
+    return jsonify(rows)
 
 
 @app.route("/api/stats")
 def stats():
     rows = anylog_query(
-        f"SELECT voltage_est, adc_centered_volts FROM {TABLE} "
+        f"SELECT timestamp_us, voltage_est, adc_centered_volts FROM {TABLE} "
         f"ORDER BY timestamp DESC LIMIT {SAMPLE_RATE_HZ}"
     )
+    rows.sort(key=lambda r: r["timestamp_us"])
     if not rows:
         return jsonify({"error": "no data"})
 

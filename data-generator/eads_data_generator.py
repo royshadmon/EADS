@@ -1,29 +1,26 @@
 """
-EADS Data Generator - Sprint 2
-Streams PowerGridSense dataset to AnyLog via REST PUT.
+EADS Data Generator
+Loads raw 7680Hz ADC data, calibrates it, and streams to AnyLog via REST PUT.
 
-Dataset: https://www.kaggle.com/datasets/ziya07/powergridsense-dataset
+Expects a raw 3-column CSV (no header): timestamp_us, channel, raw_count
+Only channel 1 samples are used.
 
-Fields in dataset:
-    - Timestamp: Date and time of sensor reading
-    - Sensor_ID: Unique identifier for the sensor
-    - Voltage (V): Voltage level in volts
-    - Current (A): Current in amperes
-    - Power (kW): Active power in kilowatts
-    - Frequency (Hz): System frequency
-    - Power_Factor: Ratio of real to apparent power
-    - Location: Geographic/logical area of sensor
-    - Anomaly_Label: Multi-class anomaly indicator (0-4)
+Calibration produces these fields:
+    - timestamp_us: Microsecond timestamp from data acquisition
+    - raw_count: Raw ADC integer count
+    - adc_input_volts: ADC input voltage
+    - adc_centered_volts: ADC centered (zero-offset) voltage
+    - voltage_est: Estimated AC voltage (V)
 
 Usage:
     # Stream dataset continuously (loops when reaching end)
-    python eads_data_generator.py stream --csv powergridsense.csv --conn 127.0.0.1:32149
+    python eads_data_generator.py stream --csv <raw_data.csv> --conn 127.0.0.1:32149
 
     # Send one batch of data
-    python eads_data_generator.py send --csv powergridsense.csv --conn 127.0.0.1:32149 --rows 100
+    python eads_data_generator.py send --csv <raw_data.csv> --conn 127.0.0.1:32149 --rows 100
 
     # Print sample from dataset
-    python eads_data_generator.py sample --csv powergridsense.csv --rows 5
+    python eads_data_generator.py sample --csv <raw_data.csv> --rows 5
 """
 
 import argparse
@@ -39,24 +36,57 @@ import requests
 # Configuration
 
 DBMS_NAME = "eads"
-TABLE_NAME = "grid_readings"
+TABLE_NAME = "voltage_calibrated"
+
+ADC_REF_VOLTS = 3.3
+ADC_COUNTS = 4096.0
+
+# Calibration constants derived from reference capture (eads_7680hz_10s.csv)
+ADC_MID_VOLTS = 1.692297
+ADC_SCALE = 281.793554
 
 # CSV Data Loading
 
+def calibrate_sample(raw_count: int) -> tuple[float, float, float]:
+    """Apply fixed calibration constants to a single raw ADC count."""
+    adc_input = raw_count * ADC_REF_VOLTS / ADC_COUNTS
+    adc_centered = adc_input - ADC_MID_VOLTS
+    voltage_est = adc_centered * ADC_SCALE
+    return adc_input, adc_centered, voltage_est
+
+
 def load_dataset(csv_path: str) -> list[dict]:
-    """Load the PowerGridSense CSV dataset into memory."""
+    """Load raw ADC CSV, filter channel 1, and apply fixed calibration constants."""
     try:
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            data = list(reader)
-            print(f"[Dataset] Loaded {len(data)} rows from {csv_path}")
-            if data:
-                print(f"[Dataset] Fields: {', '.join(data[0].keys())}")
-            return data
+        data = []
+        with open(csv_path, "r", encoding="utf-8") as f:
+            for row in csv.reader(f):
+                if len(row) != 3:
+                    continue
+                try:
+                    t, ch, raw = int(row[0]), int(row[1]), int(row[2])
+                except ValueError:
+                    continue
+                if ch != 1:
+                    continue
+                adc_input, adc_centered, voltage_est = calibrate_sample(raw)
+                data.append({
+                    "timestamp_us": str(t),
+                    "raw_count": str(raw),
+                    "adc_input_volts": f"{adc_input:.6f}",
+                    "adc_centered_volts": f"{adc_centered:.6f}",
+                    "voltage_est": f"{voltage_est:.6f}",
+                })
+
+        if not data:
+            print(f"[Error] No channel 1 samples found in {csv_path}")
+            sys.exit(1)
+
+        print(f"[Dataset] Loaded and calibrated {len(data)} channel-1 rows from {csv_path}")
+        return data
+
     except FileNotFoundError:
         print(f"[Error] CSV file not found: {csv_path}")
-        print("\nDownload the PowerGridSense dataset from:")
-        print("https://www.kaggle.com/datasets/ziya07/powergridsense-dataset")
         sys.exit(1)
     except Exception as e:
         print(f"[Error] Failed to load CSV: {e}")
@@ -77,33 +107,30 @@ def format_reading(row: dict, use_real_time: bool = True,
                    timestamp_override: str = None) -> dict:
     """
     Convert CSV row to JSON format for AnyLog.
-    Preserves all fields from the dataset.
 
     Args:
         row: CSV row dict
         use_real_time: If True, use current timestamp instead of dataset timestamp
         timestamp_override: Optional timestamp string to use (overrides use_real_time)
     """
-    # Determine timestamp to use
     if timestamp_override:
         timestamp = timestamp_override
     elif use_real_time:
-        # Use current time in ISO format
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     else:
-        # Use timestamp from dataset
-        timestamp = row.get("Timestamp", "")
+        # Convert microsecond epoch timestamp to ISO string
+        ts_us = int(row.get("timestamp_us", 0))
+        timestamp = datetime.fromtimestamp(ts_us / 1e6, tz=timezone.utc).strftime(
+            "%Y-%m-%d %H:%M:%S.%f"
+        )[:-3]
 
     return {
         "timestamp": timestamp,
-        "sensor_id": row.get("Sensor_ID", ""),
-        "voltage": row.get("Voltage (V)", ""),
-        "current": row.get("Current (A)", ""),
-        "power": row.get("Power (kW)", ""),
-        "frequency": row.get("Frequency (Hz)", ""),
-        "power_factor": row.get("Power_Factor", ""),
-        "location": row.get("Location", ""),
-        "anomaly_label": row.get("Anomaly_Label", ""),
+        "timestamp_us": row.get("timestamp_us", ""),
+        "raw_count": row.get("raw_count", ""),
+        "adc_input_volts": row.get("adc_input_volts", ""),
+        "adc_centered_volts": row.get("adc_centered_volts", ""),
+        "voltage_est": row.get("voltage_est", ""),
     }
 
 # REST PUT - Send data to AnyLog

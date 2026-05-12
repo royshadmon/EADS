@@ -56,40 +56,26 @@ AnyLog directly. Everything else is untouched.
   OUTAGE ──[ POST /end-power-outage ]──► NORMAL
 ```
 
-| Phase      | Behaviour | `anomaly_label` |
-|------------|-----------|-----------------|
-| **NORMAL** | Real readings forwarded unchanged | as-is from CSV |
-| **SPIKE**  | Voltage 250–350 V, current 25–40 A overwritten | `2` |
-| **OUTAGE** | All values zeroed out | `5` |
+| Phase      | Behaviour |
+|------------|-----------|
+| **NORMAL** | Real readings forwarded unchanged |
+| **SPIKE**  | voltage_est overwritten with extreme values (250–350 V) |
+| **OUTAGE** | All values zeroed out |
 
 Outages are **per-operator** — triggering one on proxy-1 has no effect on
 proxy-2 or proxy-3.
 
 ---
 
-## anomaly_label Reference
+## Data Table Reference
 
-When querying `grid_readings` in AnyLog, `anomaly_label` values mean:
+The data generator writes calibrated voltage data to the `voltage_calibrated` table in AnyLog.
 
-| Value | Source | Meaning |
-|-------|--------|---------|
-| `0`   | CSV dataset | Normal reading |
-| `1`   | CSV dataset | Dataset-defined anomaly type 1 |
-| `2`   | Proxy (spike phase) | Proxy-injected voltage spike preceding an outage |
-| `3`   | CSV dataset | Dataset-defined anomaly type 3 |
-| `4`   | CSV dataset | Dataset-defined outage (non-zero values) |
-| `5`   | Proxy (outage phase) | Proxy-injected full outage — all values are zero |
-
-To query specifically for proxy-simulated events:
+To query recent data:
 ```bash
-# Proxy outage rows (all zeros)
+# Recent voltage readings
 curl -X GET http://127.0.0.1:32149 \
-  -H "command: sql eads format=table \"select * from grid_readings where anomaly_label=5 limit 10\"" \
-  -H "User-Agent: AnyLog/1.23"
-
-# Proxy spike rows (high voltage)
-curl -X GET http://127.0.0.1:32149 \
-  -H "command: sql eads format=table \"select * from grid_readings where anomaly_label=2 limit 10\"" \
+  -H "command: sql eads format=table \"select * from voltage_calibrated order by timestamp desc limit 10\"" \
   -H "User-Agent: AnyLog/1.23"
 ```
 
@@ -132,9 +118,9 @@ curl http://127.0.0.1:9003/status
 ```
 
 The proxy will:
-1. Immediately start overwriting readings with high-voltage spike values
-   (`anomaly_label = 2`) for 3 seconds.
-2. Then switch to zeroing all values (`anomaly_label = 5`).
+1. Immediately start overwriting readings with high voltage_est spike values
+   for 3 seconds.
+2. Then switch to zeroing all values.
 
 ### 4 — End the outage
 

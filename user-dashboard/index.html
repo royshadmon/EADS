@@ -162,7 +162,7 @@ body{display:flex;flex-direction:column}
     <div class="empty" id="emptyState">
       <div class="empty-icon">📍</div>
       <div class="empty-title">Select a Node</div>
-      <div class="empty-sub">Click a Raspberry Pi on the map to view its live voltage waveform and sensor data.</div>
+      <div class="empty-sub">Click a Raspberry Pi on the map to view its live voltage waveform and calibrated ADC data.</div>
     </div>
 
     <div class="nd" id="nodeDetail" style="display:none">
@@ -178,7 +178,7 @@ body{display:flex;flex-direction:column}
 
       <div class="wave-card">
         <div class="wave-hdr">
-          <div><div class="wave-title">Live Voltage Waveform</div><div class="wave-sub" id="waveSub">Loading…</div></div>
+          <div><div class="wave-title">Live Voltage Waveform (voltage_est)</div><div class="wave-sub" id="waveSub">Loading…</div></div>
           <div class="live-badge"><div class="live-dot"></div>LIVE</div>
         </div>
         <div class="wave-wrap"><canvas id="waveCanvas"></canvas></div>
@@ -191,21 +191,18 @@ body{display:flex;flex-direction:column}
           <div class="mc-rng" id="mVr">—</div>
         </div>
         <div class="mc" style="--cc:var(--yellow)">
-          <div class="mc-lbl">Frequency</div>
-          <div class="mc-val"><span id="mF">—</span><span class="mc-unit"> Hz</span></div>
+          <div class="mc-lbl">ADC Centered</div>
+          <div class="mc-val"><span id="mF">—</span><span class="mc-unit"> V</span></div>
           <div class="mc-rng" id="mFr">—</div>
         </div>
       </div>
 
       <div class="acard">
-        <div class="sec-title">Anomaly Breakdown — last 5 min</div>
-        <div class="abar" id="abar"><div style="flex:1;background:var(--raised)"></div></div>
+        <div class="sec-title">Data Source — voltage_calibrated via AnyLog Query Node</div>
+        <div class="abar" id="abar"><div style="flex:1;background:var(--green)"></div></div>
         <div class="aleg">
-          <span><span class="adot" style="background:var(--green)"></span>0 Normal</span>
-          <span><span class="adot" style="background:var(--accent)"></span>1 Minor</span>
-          <span><span class="adot" style="background:var(--yellow)"></span>2 Moderate</span>
-          <span><span class="adot" style="background:var(--orange)"></span>3 Significant</span>
-          <span><span class="adot" style="background:var(--red)"></span>4 Critical</span>
+          <span><span class="adot" style="background:var(--green)"></span>7680 Hz ADC</span>
+          <span><span class="adot" style="background:var(--accent)"></span>Channel 1</span>
         </div>
       </div>
     </div>
@@ -282,12 +279,9 @@ function isoToAL(ms) {
   return new Date(ms).toISOString().replace('T', ' ').slice(0, 23);
 }
 
-// Returns an extra WHERE clause fragment if the node has a sensor_id filter set.
-// All queries use destination:'network' (same as Grafana) — per-node isolation is
-// done via sensor_id in the WHERE clause, not via the AnyLog destination TCP port.
+// Sensor filtering removed — voltage_calibrated data has no sensor_id field.
 function sensorClause(node) {
-  const f = (node.sensorFilter || '').trim();
-  return f ? ` AND sensor_id = '${f}'` : '';
+  return '';
 }
 
 // ── Map ───────────────────────────────────────────────────────────────────────
@@ -375,7 +369,7 @@ function selectNode(node) {
   $('dName').textContent = node.name;
   $('dCoords').textContent = `📍 ${node.lat.toFixed(5)}, ${node.lng.toFixed(5)}`;
   const sf = (node.sensorFilter || '').trim();
-  $('dAddr').textContent = sf ? `🔍 sensor_id = ${sf}` : `🔍 all sensors`;
+  $('dAddr').textContent = `🔍 voltage_calibrated`;
   updateBadge(node.id);
 
   clearInterval(waveTimer);
@@ -446,8 +440,7 @@ function initWaveChart() {
 
 async function fetchWave(node) {
   try {
-    const sc = sensorClause(node);
-    const sql = `SELECT timestamp, voltage FROM grid_readings${sc ? ' WHERE' + sc.slice(4) : ''} ORDER BY timestamp DESC LIMIT 500`;
+    const sql = `SELECT timestamp, voltage_est FROM voltage_calibrated ORDER BY timestamp DESC LIMIT 500`;
     const rows = await query(sql, 'network');
     setConn(true);
     if (!rows || !rows.length) return;
@@ -459,7 +452,7 @@ async function fetchWave(node) {
       // Show HH:MM:SS.mmm — works for both ISO and AnyLog-format strings
       return ts.length >= 19 ? ts.slice(11, 23) : ts;
     });
-    const vals = rows.map(r => parseFloat(r.voltage || r.Voltage || 0));
+    const vals = rows.map(r => parseFloat(r.voltage_est || r.Voltage_Est || 0));
 
     waveChart.data.labels = labels;
     waveChart.data.datasets[0].data = vals;
@@ -482,9 +475,9 @@ async function fetchWave(node) {
 async function fetchMetrics(node) {
   try {
     const ago = isoToAL(Date.now() - 60_000);
-    const sql = `SELECT avg(voltage) as av, min(voltage) as lv, max(voltage) as hv,`
-      + ` avg(frequency) as af, min(frequency) as lf, max(frequency) as hf`
-      + ` FROM grid_readings WHERE timestamp >= '${ago}'${sensorClause(node)}`;
+    const sql = `SELECT avg(voltage_est) as av, min(voltage_est) as lv, max(voltage_est) as hv,`
+      + ` avg(adc_centered_volts) as ac, min(adc_centered_volts) as lc, max(adc_centered_volts) as hc`
+      + ` FROM voltage_calibrated WHERE timestamp >= '${ago}'`;
     const rows = await query(sql, 'network');
     if (!rows || !rows.length) return;
     const m = rows[0];
@@ -499,55 +492,23 @@ async function fetchMetrics(node) {
     const fmt = v => v != null ? v.toFixed(1) : '—';
     const rng = (lo, hi) => (lo != null && hi != null) ? `${lo.toFixed(1)} – ${hi.toFixed(1)}` : '—';
 
-    const av = g('av','avg_voltage','avg(voltage)'), lv = g('lv','min_voltage'), hv = g('hv','max_voltage');
-    const af = g('af','avg_frequency','avg(frequency)'), lf = g('lf','min_frequency'), hf = g('hf','max_frequency');
+    const av = g('av','avg_voltage_est','avg(voltage_est)'), lv = g('lv','min_voltage_est'), hv = g('hv','max_voltage_est');
+    const ac = g('ac','avg_adc_centered_volts','avg(adc_centered_volts)'), lc = g('lc','min_adc_centered_volts'), hc = g('hc','max_adc_centered_volts');
 
     $('mV').textContent = fmt(av); $('mVr').textContent = rng(lv, hv);
-    $('mF').textContent = fmt(af); $('mFr').textContent = rng(lf, hf);
+    $('mF').textContent = fmt(ac); $('mFr').textContent = rng(lc, hc);
 
-    fetchAnomalies(node);
   } catch (e) { console.error('metrics:', e); }
 }
 
-async function fetchAnomalies(node) {
-  try {
-    const ago = isoToAL(Date.now() - 5 * 60_000);
-    const sql = `SELECT anomaly_label, count(*) as cnt FROM grid_readings WHERE timestamp >= '${ago}'${sensorClause(node)} GROUP BY anomaly_label`;
-    const rows = await query(sql, 'network');
-    const counts = { 0:0, 1:0, 2:0, 3:0, 4:0 };
-    (rows || []).forEach(r => {
-      const lbl = parseInt(r.anomaly_label, 10);
-      const cnt = parseInt(r.cnt || r['count(*)'] || 0, 10);
-      if (!isNaN(lbl) && lbl >= 0 && lbl <= 4) counts[lbl] = cnt;
-    });
-    renderABar(counts);
-  } catch (e) {}
-}
-
-function renderABar(counts) {
-  const total = Object.values(counts).reduce((a,b) => a+b, 0);
-  const bar = $('abar');
-  if (!total) { bar.innerHTML = '<div style="flex:1;background:var(--raised)"></div>'; return; }
-  const colors = { 0:'var(--green)', 1:'var(--accent)', 2:'var(--yellow)', 3:'var(--orange)', 4:'var(--red)' };
-  bar.innerHTML = '';
-  for (let i = 0; i <= 4; i++) {
-    const c = counts[i] || 0;
-    if (!c) continue;
-    const div = document.createElement('div');
-    div.style.flex = c;
-    div.style.background = colors[i];
-    const pct = c / total * 100;
-    div.textContent = pct >= 8 ? `${pct.toFixed(0)}%` : '';
-    bar.appendChild(div);
-  }
-}
+// (Anomaly breakdown removed — voltage_calibrated data has no anomaly_label field)
 
 // ── Node status polling (every 10 s) ─────────────────────────────────────────
 async function checkNode(node) {
   try {
     const ago = isoToAL(Date.now() - 2 * 60_000); // 2-min window
     const rows = await query(
-      `SELECT count(*) as cnt FROM grid_readings WHERE timestamp >= '${ago}'${sensorClause(node)}`,
+      `SELECT count(*) as cnt FROM voltage_calibrated WHERE timestamp >= '${ago}'`,
       'network'
     );
     const cnt = parseInt(rows?.[0]?.cnt || rows?.[0]?.['count(*)'] || 0, 10);

@@ -15,9 +15,9 @@ Outage state machine
   NORMAL  →  /sim-power-outage  →  SPIKE (3 s)  →  OUTAGE (zeros)
   OUTAGE  →  /end-power-outage  →  NORMAL
 
-  NORMAL  : forwards real readings unchanged                  (anomaly_label unchanged)
-  SPIKE   : overwrites with high-voltage values for N seconds (anomaly_label = 2)
-  OUTAGE  : overwrites all readings with zeros                (anomaly_label = 4)
+  NORMAL  : forwards real readings unchanged
+  SPIKE   : overwrites with high voltage_est values for N seconds
+  OUTAGE  : overwrites all readings with zeros
 
 Control endpoints (call from terminal with curl or the CLI helper)
 ------------------------------------------------------------------
@@ -89,30 +89,27 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 
 def _apply_spike(reading: dict) -> dict:
-    """Overwrite a reading with an extreme high-voltage spike (anomaly_label=2)."""
+    """Overwrite a reading with an extreme high-voltage spike."""
+    spike_voltage = round(random.uniform(250.0, 350.0), 4)
+    adc_centered = spike_voltage / 281.793554  # reverse calibration
+    adc_input = adc_centered + 1.692297
     return {
         **reading,
-        "voltage":       round(random.uniform(250.0, 350.0), 4),
-        "current":       round(random.uniform(25.0,  40.0),  4),
-        "power":         round(
-                            random.uniform(250.0, 350.0) *
-                            random.uniform(25.0,  40.0) / 1000,
-                            4,
-                         ),
-        "anomaly_label": 2,
+        "voltage_est":        spike_voltage,
+        "adc_centered_volts": round(adc_centered, 6),
+        "adc_input_volts":    round(adc_input, 6),
+        "raw_count":          str(int(adc_input * 4096.0 / 3.3)),
     }
 
 
 def _apply_outage(reading: dict) -> dict:
-    """Overwrite a reading with zeros — simulates a complete power outage (anomaly_label=4)."""
+    """Overwrite a reading with zeros — simulates a complete power outage."""
     return {
         **reading,
-        "voltage":       0.0,
-        "current":       0.0,
-        "power":         0.0,
-        "frequency":     0.0,
-        "power_factor":  0.0,
-        "anomaly_label": 5,
+        "voltage_est":        0.0,
+        "adc_centered_volts": 0.0,
+        "adc_input_volts":    0.0,
+        "raw_count":          "0",
     }
 
 
@@ -224,9 +221,9 @@ def sim_power_outage(background_tasks: BackgroundTasks):
     Start a simulated power outage on **this operator only**.
 
     Phase 1 — Spike (default 3 s): readings are overwritten with extreme
-    voltage/current values (anomaly_label = 2).
+    voltage_est values.
 
-    Phase 2 — Outage: all readings are zeroed out (anomaly_label = 4)
+    Phase 2 — Outage: all readings are zeroed out
     until `POST /end-power-outage` is called.
     """
     global _outage_active, _spiking

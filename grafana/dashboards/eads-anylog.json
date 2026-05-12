@@ -39,7 +39,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "# EADS Control Plane (AnyLog Network)\nDistributed query across all operators. Viewing raw time-series data.",
+        "content": "# EADS Control Plane (AnyLog Network)\nDistributed query across all operators. Viewing calibrated 7680 Hz voltage data.",
         "mode": "markdown"
       },
       "pluginVersion": "11.4.0",
@@ -94,12 +94,12 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"voltage\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"voltage_est\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
-          "target": "grid_readings"
+          "target": "voltage_calibrated"
         }
       ],
-      "title": "Voltage",
+      "title": "Estimated Voltage (V)",
       "type": "timeseries"
     },
     {
@@ -120,7 +120,7 @@
             "showPoints": "never",
             "spanNulls": false
           },
-          "unit": "amp"
+          "unit": "volt"
         },
         "overrides": []
       },
@@ -150,12 +150,12 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"current\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"adc_input_volts\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
-          "target": "grid_readings"
+          "target": "voltage_calibrated"
         }
       ],
-      "title": "Current (Amps)",
+      "title": "ADC Input Voltage",
       "type": "timeseries"
     },
     {
@@ -176,7 +176,7 @@
             "showPoints": "never",
             "spanNulls": false
           },
-          "unit": "kwatt"
+          "unit": "volt"
         },
         "overrides": []
       },
@@ -206,12 +206,12 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"power\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"adc_centered_volts\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
-          "target": "grid_readings"
+          "target": "voltage_calibrated"
         }
       ],
-      "title": "Power",
+      "title": "ADC Centered Voltage",
       "type": "timeseries"
     },
     {
@@ -232,7 +232,7 @@
             "showPoints": "never",
             "spanNulls": false
           },
-          "unit": "hertz"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -262,68 +262,12 @@
             "type": "simpod-json-datasource",
             "uid": "anylog-datasource"
           },
-          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"frequency\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
+          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"raw_count\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
           "refId": "A",
-          "target": "grid_readings"
+          "target": "voltage_calibrated"
         }
       ],
-      "title": "Frequency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "simpod-json-datasource",
-        "uid": "anylog-datasource"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "showPoints": "never",
-            "spanNulls": false
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 18
-      },
-      "id": 74,
-      "options": {
-        "legend": {
-          "calcs": [
-            "last"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "simpod-json-datasource",
-            "uid": "anylog-datasource"
-          },
-          "payload": "{\n  \"type\": \"increments\",\n  \"dbms\": \"eads\",\n  \"time_column\": \"timestamp\",\n  \"value_column\": \"anomaly_label\",\n  \"grafana\": {\n    \"format_as\": \"timeseries\",\n    \"data_points\": 1000\n  }\n}",
-          "refId": "A",
-          "target": "grid_readings"
-        }
-      ],
-      "title": "Anomaly Label",
+      "title": "Raw ADC Count",
       "type": "timeseries"
     }
   ],

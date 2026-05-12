@@ -150,7 +150,7 @@ python3 eads_voltage_predictor.py run --conn 127.0.0.1:32149
 
 ```bash
 # Watch row count
-watch -n 2 'docker exec postgres1 psql -U demo -d eads -c "SELECT COUNT(*) FROM grid_readings;"'
+watch -n 2 'docker exec postgres1 psql -U demo -d eads -c "SELECT COUNT(*) FROM voltage_calibrated;"'
 ```
 
 ---

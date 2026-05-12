@@ -42,7 +42,7 @@ from sklearn.preprocessing import StandardScaler
 # ── Configuration ──────────────────────────────────────────────────────────────
 
 DBMS          = "eads"
-SOURCE_TABLE  = "grid_readings"
+SOURCE_TABLE  = "voltage_calibrated"
 PRED_TABLE    = "voltage_predictions"
 HORIZON_SECS  = 5
 DEFAULT_LAGS  = 100
@@ -126,38 +126,29 @@ def anylog_put(conn: str, payload: list[dict], auth: tuple = ()) -> bool:
 
 def build_lag_features(df: pd.DataFrame, n_lags: int) -> pd.DataFrame:
     """
-    For each sensor_id, create n_lags lag columns of voltage
-    and a target column = voltage shifted back by HORIZON_SECS rows.
+    Create n_lags lag columns of voltage_est
+    and a target column = voltage_est shifted back by HORIZON_SECS rows.
 
-    Assumes df is sorted by (sensor_id, timestamp).
-    One row ≈ one second of data per sensor (matches 1 Hz streaming).
+    Assumes df is sorted by timestamp.
     """
     df = df.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-    df = df.sort_values(["sensor_id", "timestamp"]).reset_index(drop=True)
+    df = df.sort_values("timestamp").reset_index(drop=True)
 
-    feature_frames = []
+    df["voltage_est"] = pd.to_numeric(df["voltage_est"], errors="coerce")
 
-    for sensor_id, grp in df.groupby("sensor_id"):
-        grp = grp.reset_index(drop=True)
-        grp["voltage"] = pd.to_numeric(grp["voltage"], errors="coerce")
+    # Lag features: voltage_est at t-1, t-2, ..., t-n_lags
+    for lag in range(1, n_lags + 1):
+        df[f"lag_{lag}"] = df["voltage_est"].shift(lag)
 
-        # Lag features: voltage at t-1, t-2, ..., t-n_lags
-        for lag in range(1, n_lags + 1):
-            grp[f"lag_{lag}"] = grp["voltage"].shift(lag)
-
-        # Target: voltage n steps ahead (HORIZON_SECS rows forward)
-        grp["target_voltage"] = grp["voltage"].shift(-HORIZON_SECS)
-
-        feature_frames.append(grp)
-
-    result = pd.concat(feature_frames, ignore_index=True)
+    # Target: voltage_est n steps ahead (HORIZON_SECS rows forward)
+    df["target_voltage"] = df["voltage_est"].shift(-HORIZON_SECS)
 
     # Drop rows with NaN from shifting
     lag_cols = [f"lag_{i}" for i in range(1, n_lags + 1)]
-    result = result.dropna(subset=lag_cols + ["target_voltage", "voltage"])
+    df = df.dropna(subset=lag_cols + ["target_voltage", "voltage_est"])
 
-    return result
+    return df
 
 
 def get_feature_cols(n_lags: int) -> list[str]:
@@ -175,10 +166,10 @@ def train(conn: str, auth: tuple, train_hours: int, n_lags: int) -> tuple:
     print(f"[Train] Source: {DBMS}.{SOURCE_TABLE}")
 
     sql = (
-        f"SELECT timestamp, sensor_id, voltage "
+        f"SELECT timestamp, voltage_est "
         f"FROM {SOURCE_TABLE} "
         f"WHERE timestamp >= NOW() - {train_hours} hours "
-        f"ORDER BY sensor_id, timestamp "
+        f"ORDER BY timestamp "
         f"LIMIT 10000"
     )
 
@@ -191,8 +182,7 @@ def train(conn: str, auth: tuple, train_hours: int, n_lags: int) -> tuple:
             "Make sure eads_data_generator.py has been running first."
         )
 
-    print(f"[Train] Retrieved {len(df):,} rows across "
-          f"{df['sensor_id'].nunique() if 'sensor_id' in df.columns else '?'} sensors")
+    print(f"[Train] Retrieved {len(df):,} rows")
 
     # Build features
     print(f"[Train] Building lag features (n_lags={n_lags}, horizon={HORIZON_SECS}s)...")
@@ -262,10 +252,10 @@ def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
 
     def fetch_thread():
         sql = (
-            f"SELECT timestamp, sensor_id, voltage "
+            f"SELECT timestamp, voltage_est "
             f"FROM {SOURCE_TABLE} "
             f"WHERE timestamp >= NOW() - {window_secs} seconds "
-            f"ORDER BY sensor_id, timestamp "
+            f"ORDER BY timestamp "
             f"LIMIT {fetch_limit}"
         )
         while True:
@@ -273,8 +263,8 @@ def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
             df = anylog_query(conn, sql, auth)
             if df is not None and not df.empty:
                 df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-                df = df.sort_values(["sensor_id", "timestamp"])
-                df["voltage"] = pd.to_numeric(df["voltage"], errors="coerce")
+                df = df.sort_values("timestamp")
+                df["voltage_est"] = pd.to_numeric(df["voltage_est"], errors="coerce")
                 with latest_df["lock"]:
                     latest_df["data"] = df
             sleep_t = 0.5 - (time.monotonic() - t0)
@@ -315,19 +305,14 @@ def infer_loop(conn: str, auth: tuple, model, scaler, n_lags: int):
             now_utc = datetime.now(timezone.utc)
             predicted_time = now_utc + timedelta(seconds=HORIZON_SECS)
 
-            for sensor_id, grp in df.groupby("sensor_id"):
-                grp = grp.reset_index(drop=True)
-                recent_voltages = grp["voltage"].dropna().values
-                if len(recent_voltages) < n_lags:
-                    continue
-
+            recent_voltages = df["voltage_est"].dropna().values
+            if len(recent_voltages) >= n_lags:
                 lag_values = recent_voltages[-n_lags:][::-1]
                 X = scaler.transform([lag_values])
-                predicted_v = float(np.clip(model.predict(X)[0], 0.0, 1000.0))
+                predicted_v = float(np.clip(model.predict(X)[0], -500.0, 500.0))
 
                 predictions.append({
                     "timestamp": predicted_time.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                    "sensor_id": str(sensor_id).strip(),
                     "predicted_voltage": round(predicted_v, 4),
                     "horizon_seconds": HORIZON_SECS,
                     "n_lags_used": n_lags,

@@ -5,773 +5,625 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EADS — Energy Anomaly Detection System</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0b0f14;--surface:#131920;--raised:#1a2230;--border:#1e2a3a;
+  --text:#e2e8f0;--muted:#7a8ba3;
+  --accent:#38bdf8;--green:#34d399;--yellow:#fbbf24;--orange:#fb923c;--red:#f87171;--purple:#a78bfa;
+  --r:10px;
+}
+html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+body{display:flex;flex-direction:column}
 
-  :root {
-    --bg: #0b0f14;
-    --surface: #131920;
-    --surface-raised: #1a2230;
-    --border: #1e2a3a;
-    --text: #e2e8f0;
-    --text-muted: #7a8ba3;
-    --accent: #38bdf8;
-    --green: #34d399;
-    --yellow: #fbbf24;
-    --orange: #fb923c;
-    --red: #f87171;
-    --purple: #a78bfa;
-    --radius: 12px;
-  }
+/* TOPBAR */
+.topbar{flex-shrink:0;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface);z-index:200}
+.tl{display:flex;align-items:center;gap:10px}
+.logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#0b0f14}
+.ttl{font-size:15px;font-weight:600}
+.sub{font-size:11px;color:var(--muted)}
+.tr{display:flex;align-items:center;gap:8px}
+.pill{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--raised);font-size:12px;color:var(--muted)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0;transition:background .3s}
+.dot.ok{background:var(--green);box-shadow:0 0 6px rgba(52,211,153,.5)}
+.ibtn{width:32px;height:32px;border-radius:7px;border:1px solid var(--border);background:var(--raised);color:var(--muted);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;font-family:inherit}
+.ibtn:hover,.ibtn.on{border-color:var(--accent);color:var(--accent)}
 
-  body {
-    font-family: 'DM Sans', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+/* SETTINGS */
+.settings{flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);max-height:0;overflow:hidden;transition:max-height .3s ease}
+.settings.open{max-height:380px}
+.s-inner{padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.s-sect{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.s-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.fld{display:flex;flex-direction:column;gap:3px}
+.fld label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fld input{background:var(--raised);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;width:130px}
+.fld input.w180{width:180px}
+.fld input:focus{outline:none;border-color:var(--accent)}
+.btn{padding:7px 16px;border-radius:7px;border:none;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.btn-p{background:var(--accent);color:#0b0f14}
+.ncards{display:flex;gap:10px;flex-wrap:wrap}
+.ncard{background:var(--raised);border:1px solid var(--border);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:8px}
+.ncard-title{font-size:12px;font-weight:600}
+.ncard-row{display:flex;gap:8px}
 
-  /* Top bar */
-  .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 32px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .topbar-left { display: flex; align-items: center; gap: 12px; }
-  .topbar-logo {
-    width: 36px; height: 36px;
-    background: linear-gradient(135deg, var(--accent), var(--purple));
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 16px; color: #0b0f14;
-  }
-  .topbar-title { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
-  .topbar-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+/* LAYOUT */
+.layout{flex:1;display:flex;min-height:0}
 
-  .topbar-right { display: flex; align-items: center; gap: 16px; }
-  .connection-status {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 13px; color: var(--text-muted);
-    background: var(--surface-raised);
-    padding: 6px 14px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-  }
-  .status-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--red);
-    transition: background 0.3s;
-  }
-  .status-dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(52,211,153,0.5); }
+/* MAP */
+.map-panel{flex:0 0 55%;position:relative;border-right:1px solid var(--border)}
+#map{width:100%;height:100%}
+.leaflet-container{background:#e8e0d8!important}
+.leaflet-control-attribution{background:rgba(11,15,20,.85)!important;color:var(--muted)!important}
+.leaflet-control-attribution a{color:var(--accent)!important}
+.leaflet-bar a{background:var(--raised)!important;color:var(--text)!important;border-color:var(--border)!important}
+.leaflet-bar a:hover{background:var(--border)!important}
+.map-legend{position:absolute;top:10px;left:10px;z-index:1000;background:rgba(19,25,32,.92);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;display:flex;flex-direction:column;gap:6px;backdrop-filter:blur(6px)}
+.leg-row{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+.leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 
-  .config-btn {
-    background: var(--surface-raised);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    cursor: pointer;
-    font-family: inherit;
-    transition: all 0.2s;
-  }
-  .config-btn:hover { border-color: var(--accent); color: var(--accent); }
+/* DETAIL PANEL */
+.detail-panel{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.detail-panel::-webkit-scrollbar{width:4px}
+.detail-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 
-  /* Config panel */
-  .config-panel {
-    display: none;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 32px;
-    gap: 12px;
-    align-items: flex-end;
-  }
-  .config-panel.open { display: flex; }
-  .config-field { display: flex; flex-direction: column; gap: 4px; }
-  .config-field label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-  .config-field input {
-    background: var(--surface-raised);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    width: 200px;
-  }
-  .config-field input:focus { outline: none; border-color: var(--accent); }
-  .config-save {
-    background: var(--accent);
-    color: #0b0f14;
-    border: none;
-    padding: 8px 20px;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 13px;
-  }
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);padding:32px;text-align:center}
+.empty-icon{font-size:38px;opacity:.3}
+.empty-title{font-size:16px;font-weight:600;color:var(--text)}
+.empty-sub{font-size:13px;line-height:1.5}
 
-  /* Main content */
-  .main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+.nd{padding:18px;display:flex;flex-direction:column;gap:14px}
+.nd-top{display:flex;align-items:center;justify-content:space-between}
+.nd-name{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.badge{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge.online{background:rgba(52,211,153,.12);color:var(--green);border:1px solid rgba(52,211,153,.3)}
+.badge.offline{background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.3)}
+.badge.unknown{background:rgba(122,139,163,.12);color:var(--muted);border:1px solid var(--border)}
+.nd-meta{display:flex;gap:14px;font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;flex-wrap:wrap}
 
-  /* Health banner */
-  .health-banner {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 20px 24px;
-    border-radius: var(--radius);
-    margin-bottom: 24px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    transition: all 0.5s;
-  }
-  .health-banner.healthy { border-color: rgba(52,211,153,0.3); background: linear-gradient(90deg, rgba(52,211,153,0.06), var(--surface)); }
-  .health-banner.warning { border-color: rgba(251,191,36,0.3); background: linear-gradient(90deg, rgba(251,191,36,0.06), var(--surface)); }
-  .health-banner.danger  { border-color: rgba(248,113,113,0.3); background: linear-gradient(90deg, rgba(248,113,113,0.06), var(--surface)); }
-  .health-banner.offline { border-color: var(--border); }
+/* Waveform */
+.wave-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+.wave-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.wave-title{font-size:13px;font-weight:600}
+.wave-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.live-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--green);background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25);padding:3px 8px;border-radius:10px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:blink 1.2s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ns-spin{position:absolute;inset:0;border-radius:50%;border:2.5px dashed #7a8ba3;animation:spin 1.3s linear infinite}
+@keyframes sel-pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.5)}50%{box-shadow:0 0 0 5px rgba(255,255,255,0)}}
+.ns-sel{position:absolute;inset:-5px;border-radius:50%;border:2.5px solid rgba(255,255,255,.9);animation:sel-pulse 2s ease-in-out infinite}
+.wave-wrap{height:180px;position:relative}
+.wave-wrap canvas{width:100%!important;height:100%!important}
 
-  .health-icon {
-    width: 48px; height: 48px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 24px; flex-shrink: 0;
-  }
-  .health-banner.healthy .health-icon { background: rgba(52,211,153,0.15); }
-  .health-banner.warning .health-icon { background: rgba(251,191,36,0.15); }
-  .health-banner.danger  .health-icon { background: rgba(248,113,113,0.15); }
-  .health-banner.offline .health-icon { background: rgba(122,139,163,0.15); }
+/* Mini metrics */
+.mrow{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;position:relative;overflow:hidden}
+.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--cc,var(--accent))}
+.mc-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.mc-val{font-size:20px;font-weight:700;letter-spacing:-.02em;font-family:'JetBrains Mono',monospace;line-height:1}
+.mc-unit{font-size:12px;font-weight:400;color:var(--muted)}
+.mc-rng{font-size:10px;color:var(--muted);margin-top:3px;font-family:'JetBrains Mono',monospace}
 
-  .health-text h2 { font-size: 18px; font-weight: 600; margin-bottom: 2px; }
-  .health-text p  { font-size: 14px; color: var(--text-muted); line-height: 1.4; }
+/* Anomaly */
+.acard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+.sec-title{font-size:13px;font-weight:600;margin-bottom:10px}
+.abar{display:flex;height:26px;border-radius:6px;overflow:hidden;margin-bottom:8px}
+.abar div{display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#0b0f14;transition:flex .5s ease;min-width:0}
+.aleg{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--muted)}
+.aleg span{display:flex;align-items:center;gap:4px}
+.adot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
 
-  .last-update {
-    margin-left: auto;
-    text-align: right;
-    font-size: 12px;
-    color: var(--text-muted);
-    flex-shrink: 0;
-  }
-  .last-update span { display: block; font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--text); margin-top: 2px; }
-
-  /* Metric cards */
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-  @media (max-width: 900px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
-
-  .metric-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    transition: border-color 0.3s;
-    position: relative;
-    overflow: hidden;
-  }
-  .metric-card::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: var(--accent);
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-  .metric-card.active::after { opacity: 1; }
-  .metric-card.active { border-color: rgba(56,189,248,0.3); }
-
-  .metric-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-  .metric-label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
-  .metric-icon { font-size: 18px; }
-
-  .metric-value {
-    font-size: 32px;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    font-family: 'JetBrains Mono', 'DM Sans', monospace;
-    line-height: 1;
-    margin-bottom: 4px;
-  }
-  .metric-unit { font-size: 16px; font-weight: 400; color: var(--text-muted); }
-  .metric-explain {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-top: 8px;
-    line-height: 1.4;
-  }
-  .metric-range {
-    display: flex; gap: 12px;
-    margin-top: 10px;
-    font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
-    color: var(--text-muted);
-  }
-  .metric-range .lo { color: var(--accent); }
-  .metric-range .hi { color: var(--orange); }
-
-  /* Chart area */
-  .charts-section {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-  @media (max-width: 900px) { .charts-section { grid-template-columns: 1fr; } }
-
-  .chart-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-  }
-  .chart-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-  .chart-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
-  .chart-container { position: relative; height: 200px; }
-  .chart-container canvas { width: 100% !important; height: 100% !important; }
-
-  /* Anomaly section */
-  .anomaly-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-bottom: 24px;
-  }
-  .anomaly-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-  .anomaly-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5; }
-  .anomaly-bar {
-    display: flex;
-    height: 40px;
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 12px;
-  }
-  .anomaly-bar div {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 600;
-    transition: flex 0.5s ease;
-    min-width: 0;
-  }
-  .anomaly-legend {
-    display: flex; flex-wrap: wrap; gap: 16px;
-    font-size: 12px; color: var(--text-muted);
-  }
-  .anomaly-legend span { display: flex; align-items: center; gap: 6px; }
-  .anomaly-legend .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-
-  /* Footer */
-  .footer {
-    text-align: center;
-    padding: 24px 32px;
-    font-size: 12px;
-    color: var(--text-muted);
-    border-top: 1px solid var(--border);
-  }
-
-  /* No data state */
-  .no-data {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-muted);
-    font-size: 13px;
-    gap: 4px;
-  }
-  .no-data-icon { font-size: 28px; opacity: 0.4; }
-
-  /* Fade in animation */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .fade-in { animation: fadeUp 0.4s ease both; }
+.last-seen{font-size:11px;color:var(--muted);text-align:right;font-family:'JetBrains Mono',monospace;padding:0 18px 14px;flex-shrink:0}
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <div class="topbar-left">
-    <div class="topbar-logo">E</div>
+  <div class="tl">
+    <div class="logo">E</div>
+    <div><div class="ttl">EADS Dashboard</div><div class="sub">Energy Anomaly Detection System</div></div>
+  </div>
+  <div class="tr">
+    <div class="pill"><div class="dot" id="connDot"></div><span id="connText">Connecting…</span></div>
+    <button class="ibtn" id="settingsBtn" title="Settings">⚙</button>
+  </div>
+</div>
+
+<div class="settings" id="settingsPanel">
+  <div class="s-inner">
     <div>
-      <div class="topbar-title">EADS Dashboard</div>
-      <div class="topbar-subtitle">Energy Anomaly Detection System</div>
-    </div>
-  </div>
-  <div class="topbar-right">
-    <div class="connection-status">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">Connecting…</span>
-    </div>
-    <button class="config-btn" id="configToggle">⚙ Settings</button>
-  </div>
-</div>
-
-<div class="config-panel" id="configPanel">
-  <div class="config-field">
-    <label>AnyLog Query Node Host</label>
-    <input type="text" id="cfgHost" value="127.0.0.1" />
-  </div>
-  <div class="config-field">
-    <label>REST Port</label>
-    <input type="text" id="cfgPort" value="32149" />
-  </div>
-  <div class="config-field">
-    <label>Refresh Interval (sec)</label>
-    <input type="number" id="cfgInterval" value="5" min="1" max="60" />
-  </div>
-  <button class="config-save" id="cfgSave">Save & Reconnect</button>
-</div>
-
-<div class="main">
-  <!-- Health banner -->
-  <div class="health-banner offline" id="healthBanner">
-    <div class="health-icon" id="healthIcon">⏳</div>
-    <div class="health-text">
-      <h2 id="healthTitle">Waiting for data…</h2>
-      <p id="healthDesc">Connecting to the AnyLog query node to fetch grid readings.</p>
-    </div>
-    <div class="last-update">
-      Last updated<br>
-      <span id="lastUpdate">—</span>
-    </div>
-  </div>
-
-  <!-- KPI cards -->
-  <div class="metrics-grid">
-    <div class="metric-card" id="cardVoltage">
-      <div class="metric-header">
-        <div class="metric-label">Voltage</div>
-        <div class="metric-icon">⚡</div>
-      </div>
-      <div class="metric-value"><span id="valVoltage">—</span> <span class="metric-unit">V</span></div>
-      <div class="metric-explain">
-        How much electrical "pressure" is in the line.
-        Normal range is around <b>220–240 V</b>.
-      </div>
-      <div class="metric-range">
-        <span class="lo" id="loVoltage">min —</span>
-        <span class="hi" id="hiVoltage">max —</span>
+      <div class="s-sect">AnyLog Query Node</div>
+      <div class="s-row">
+        <div class="fld"><label>Host</label><input type="text" id="cfgHost" class="w180" /></div>
+        <div class="fld"><label>REST Port</label><input type="text" id="cfgPort" /></div>
+        <button class="btn btn-p" id="cfgSave">Save & Reconnect</button>
       </div>
     </div>
-
-    <div class="metric-card" id="cardCurrent">
-      <div class="metric-header">
-        <div class="metric-label">Current</div>
-        <div class="metric-icon">🌊</div>
-      </div>
-      <div class="metric-value"><span id="valCurrent">—</span> <span class="metric-unit">A</span></div>
-      <div class="metric-explain">
-        How much electricity is flowing right now.
-        Think of it like the "flow rate" of water in a pipe.
-      </div>
-      <div class="metric-range">
-        <span class="lo" id="loCurrent">min —</span>
-        <span class="hi" id="hiCurrent">max —</span>
-      </div>
-    </div>
-
-    <div class="metric-card" id="cardPower">
-      <div class="metric-header">
-        <div class="metric-label">Power</div>
-        <div class="metric-icon">🔋</div>
-      </div>
-      <div class="metric-value"><span id="valPower">—</span> <span class="metric-unit">kW</span></div>
-      <div class="metric-explain">
-        The actual energy being used or produced.
-        Voltage × Current = Power.
-      </div>
-      <div class="metric-range">
-        <span class="lo" id="loPower">min —</span>
-        <span class="hi" id="hiPower">max —</span>
-      </div>
-    </div>
-
-    <div class="metric-card" id="cardFrequency">
-      <div class="metric-header">
-        <div class="metric-label">Frequency</div>
-        <div class="metric-icon">〰️</div>
-      </div>
-      <div class="metric-value"><span id="valFrequency">—</span> <span class="metric-unit">Hz</span></div>
-      <div class="metric-explain">
-        The "heartbeat" of the grid — how fast the AC current
-        oscillates. Should stay near <b>50 Hz</b>.
-      </div>
-      <div class="metric-range">
-        <span class="lo" id="loFrequency">min —</span>
-        <span class="hi" id="hiFrequency">max —</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Charts -->
-  <div class="charts-section">
-    <div class="chart-card">
-      <div class="chart-title">Voltage Over Time</div>
-      <div class="chart-desc">The electrical pressure across the grid sensors over the last few minutes.</div>
-      <div class="chart-container"><canvas id="chartVoltage"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Current Over Time</div>
-      <div class="chart-desc">How much electricity is flowing — spikes may indicate high demand or a fault.</div>
-      <div class="chart-container"><canvas id="chartCurrent"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Power Over Time</div>
-      <div class="chart-desc">Total energy being consumed or generated, measured in kilowatts.</div>
-      <div class="chart-container"><canvas id="chartPower"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Frequency Over Time</div>
-      <div class="chart-desc">Grid frequency should hover around 50 Hz. Deviation means supply/demand imbalance.</div>
-      <div class="chart-container"><canvas id="chartFrequency"></canvas></div>
-    </div>
-  </div>
-
-  <!-- Anomaly breakdown -->
-  <div class="anomaly-card">
-    <div class="anomaly-title">Anomaly Breakdown — What's happening on the grid?</div>
-    <div class="anomaly-desc">
-      Our sensors tag each reading with a status label from 0 to 4.
-      <b>0 = Normal</b> — everything is fine.
-      <b>1 = Minor glitch</b> — small deviation, usually self-correcting.
-      <b>2 = Moderate issue</b> — worth watching.
-      <b>3 = Significant anomaly</b> — may need attention soon.
-      <b>4 = Critical</b> — immediate investigation recommended.
-    </div>
-    <div class="anomaly-bar" id="anomalyBar">
-      <div style="flex:1; background:var(--green);">—</div>
-    </div>
-    <div class="anomaly-legend">
-      <span><span class="dot" style="background:var(--green);"></span> 0 — Normal</span>
-      <span><span class="dot" style="background:var(--accent);"></span> 1 — Minor</span>
-      <span><span class="dot" style="background:var(--yellow);"></span> 2 — Moderate</span>
-      <span><span class="dot" style="background:var(--orange);"></span> 3 — Significant</span>
-      <span><span class="dot" style="background:var(--red);"></span> 4 — Critical</span>
+    <div>
+      <div class="s-sect">Raspberry Pi Nodes</div>
+      <div class="ncards" id="nodeConfigs"></div>
     </div>
   </div>
 </div>
 
-<div class="footer">
-  EADS — Energy Anomaly Detection System &middot; Querying AnyLog node at <span id="footerEndpoint">127.0.0.1:32149</span>
+<div class="layout">
+  <div class="map-panel">
+    <div id="map"></div>
+    <div class="map-legend">
+      <div class="leg-row"><div class="leg-dot" style="background:var(--green)"></div>Online</div>
+      <div class="leg-row"><div class="leg-dot" style="background:var(--red)"></div>Offline</div>
+      <div class="leg-row"><div class="leg-dot" style="background:var(--muted)"></div>Checking…</div>
+    </div>
+  </div>
+
+  <div class="detail-panel">
+    <div class="empty" id="emptyState">
+      <div class="empty-icon">📍</div>
+      <div class="empty-title">Select a Node</div>
+      <div class="empty-sub">Click a Raspberry Pi on the map to view its live voltage waveform and sensor data.</div>
+    </div>
+
+    <div class="nd" id="nodeDetail" style="display:none">
+      <div class="nd-top">
+        <div class="nd-name" id="dName">Pi-1</div>
+        <div class="badge unknown" id="dBadge">Checking…</div>
+      </div>
+      <div class="nd-meta">
+        <span id="dCoords">📍 —</span>
+        <span id="dAddr">🔗 —</span>
+        <span id="dLastSeen">🕒 —</span>
+      </div>
+
+      <div class="wave-card">
+        <div class="wave-hdr">
+          <div><div class="wave-title">Live Voltage Waveform</div><div class="wave-sub" id="waveSub">Loading…</div></div>
+          <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+        </div>
+        <div class="wave-wrap"><canvas id="waveCanvas"></canvas></div>
+      </div>
+
+      <div class="mrow">
+        <div class="mc" style="--cc:var(--accent)">
+          <div class="mc-lbl">Voltage</div>
+          <div class="mc-val"><span id="mV">—</span><span class="mc-unit"> V</span></div>
+          <div class="mc-rng" id="mVr">—</div>
+        </div>
+        <div class="mc" style="--cc:var(--yellow)">
+          <div class="mc-lbl">Frequency</div>
+          <div class="mc-val"><span id="mF">—</span><span class="mc-unit"> Hz</span></div>
+          <div class="mc-rng" id="mFr">—</div>
+        </div>
+      </div>
+
+      <div class="acard">
+        <div class="sec-title">Anomaly Breakdown — last 5 min</div>
+        <div class="abar" id="abar"><div style="flex:1;background:var(--raised)"></div></div>
+        <div class="aleg">
+          <span><span class="adot" style="background:var(--green)"></span>0 Normal</span>
+          <span><span class="adot" style="background:var(--accent)"></span>1 Minor</span>
+          <span><span class="adot" style="background:var(--yellow)"></span>2 Moderate</span>
+          <span><span class="adot" style="background:var(--orange)"></span>3 Significant</span>
+          <span><span class="adot" style="background:var(--red)"></span>4 Critical</span>
+        </div>
+      </div>
+    </div>
+    <div class="last-seen" id="lastSeenLine" style="display:none"></div>
+  </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
-(function() {
-  // --- Config ---
-  let ANYLOG_HOST = localStorage.getItem('eads_host') || '127.0.0.1';
-  let ANYLOG_PORT = localStorage.getItem('eads_port') || '32149';
-  let REFRESH_SEC = parseInt(localStorage.getItem('eads_interval') || '5', 10);
-  let timer = null;
+(function () {
+'use strict';
 
-  const $ = id => document.getElementById(id);
+// ── Persistence helpers ───────────────────────────────────────────────────────
+const lsGet = k => localStorage.getItem('eads_' + k);
+const lsSet = (k, v) => localStorage.setItem('eads_' + k, typeof v === 'string' ? v : JSON.stringify(v));
 
-  // Populate config fields
-  $('cfgHost').value = ANYLOG_HOST;
-  $('cfgPort').value = ANYLOG_PORT;
-  $('cfgInterval').value = REFRESH_SEC;
-  $('footerEndpoint').textContent = `${ANYLOG_HOST}:${ANYLOG_PORT}`;
+const DEFAULT_NODES = [
+  { id:'n1', name:'Pi-1', lat:36.9993, lng:-122.0622, sensorFilter:'' },
+  { id:'n2', name:'Pi-2', lat:37.0015, lng:-122.0584, sensorFilter:'' },
+  { id:'n3', name:'Pi-3', lat:36.9965, lng:-122.0597, sensorFilter:'' },
+];
 
-  $('configToggle').addEventListener('click', () => {
-    $('configPanel').classList.toggle('open');
-  });
-  $('cfgSave').addEventListener('click', () => {
-    ANYLOG_HOST = $('cfgHost').value.trim();
-    ANYLOG_PORT = $('cfgPort').value.trim();
-    REFRESH_SEC = parseInt($('cfgInterval').value, 10) || 5;
-    localStorage.setItem('eads_host', ANYLOG_HOST);
-    localStorage.setItem('eads_port', ANYLOG_PORT);
-    localStorage.setItem('eads_interval', REFRESH_SEC);
-    $('footerEndpoint').textContent = `${ANYLOG_HOST}:${ANYLOG_PORT}`;
-    $('configPanel').classList.remove('open');
-    startPolling();
-  });
+let HOST  = lsGet('host')  || '127.0.0.1';
+let PORT  = lsGet('port')  || '32149';
+let nodes = JSON.parse(lsGet('nodes') || 'null') || DEFAULT_NODES;
 
-  // --- AnyLog REST query helper ---
-  // Routes through nginx reverse proxy at /anylog to avoid CORS.
-  // Nginx forwards to the actual AnyLog query node at ANYLOG_HOST:ANYLOG_PORT.
-  async function queryAnyLog(sql) {
+// ── State ─────────────────────────────────────────────────────────────────────
+let selectedNode = null;
+let nodeStatus   = {};   // { id: { online:bool|null, lastSeen:string|null } }
+let waveTimer    = null;
+let metricTimer  = null;
+let statusTimer  = null;
+let waveChart    = null;
+let map, markers = {};
+
+const $ = id => document.getElementById(id);
+
+// ── AnyLog REST query ─────────────────────────────────────────────────────────
+// Queries through the nginx /anylog proxy. The `destination` header tells the
+// AnyLog query node which operator(s) to reach: 'network' = all, or 'ip:port'.
+async function query(sql, destination) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 6000);
+  try {
     const resp = await fetch('/anylog', {
       method: 'GET',
+      signal: ctrl.signal,
       headers: {
         'User-Agent': 'AnyLog/1.23',
         'command': `sql eads format=json "${sql}"`,
-        'destination': 'network'
-      }
+        'destination': destination || 'network',
+      },
     });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const raw = await resp.json();
-    // AnyLog wraps results in {"Query": [...], "Statistics": [...]}
-    // Extract just the Query array
     if (raw && raw.Query) return raw.Query;
     if (Array.isArray(raw)) return raw;
     return [];
+  } finally {
+    clearTimeout(tid);
   }
+}
 
-  // --- Chart setup ---
-  const chartOpts = (label, color, unit) => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 300 },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#1a2230',
-        borderColor: '#1e2a3a',
-        borderWidth: 1,
-        titleFont: { family: 'DM Sans' },
-        bodyFont: { family: 'JetBrains Mono', size: 12 },
-        callbacks: { label: ctx => `${ctx.parsed.y.toFixed(2)} ${unit}` }
-      }
+// ── Connection indicator ──────────────────────────────────────────────────────
+function setConn(ok) {
+  $('connDot').className = ok ? 'dot ok' : 'dot';
+  $('connText').textContent = ok ? `Connected — ${HOST}:${PORT}` : 'Disconnected';
+}
+
+// ── Timestamp helpers ─────────────────────────────────────────────────────────
+// AnyLog stores timestamps as "YYYY-MM-DD HH:MM:SS.mmm"
+function isoToAL(ms) {
+  return new Date(ms).toISOString().replace('T', ' ').slice(0, 23);
+}
+
+// Returns an extra WHERE clause fragment if the node has a sensor_id filter set.
+// All queries use destination:'network' (same as Grafana) — per-node isolation is
+// done via sensor_id in the WHERE clause, not via the AnyLog destination TCP port.
+function sensorClause(node) {
+  const f = (node.sensorFilter || '').trim();
+  return f ? ` AND sensor_id = '${f}'` : '';
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+function nodeColor(id) {
+  const s = nodeStatus[id];
+  if (!s || s.online === null || s.online === undefined) return '#7a8ba3';
+  return s.online ? '#34d399' : '#f87171';
+}
+
+function makeNodeIcon(node) {
+  const s = nodeStatus[node.id];
+  const isUnknown = !s || s.online == null;
+  const isSel = selectedNode?.id === node.id;
+  const color = isUnknown ? '#7a8ba3' : (s.online ? '#34d399' : '#f87171');
+
+  const selRing = isSel ? `<div class="ns-sel"></div>` : '';
+
+  // Unknown: spinning dashed ring + faint dot
+  // Online/Offline: translucent fill + solid inner disc with colored border
+  const inner = isUnknown
+    ? `<div class="ns-spin"></div>
+       <div style="position:absolute;top:12px;left:12px;width:8px;height:8px;border-radius:50%;background:#7a8ba3;opacity:.4"></div>`
+    : `<div style="position:absolute;inset:0;border-radius:50%;background:${color};opacity:.22;border:2px solid ${color}"></div>
+       <div style="position:absolute;inset:5px;border-radius:50%;background:${color};box-shadow:0 0 10px ${color}bb,0 0 18px ${color}44"></div>`;
+
+  return L.divIcon({
+    className: '',
+    html: `<div style="position:relative;width:32px;height:32px;cursor:pointer">
+      ${selRing}${inner}
+      <div style="position:absolute;top:35px;left:50%;transform:translateX(-50%);background:rgba(19,25,32,.92);border:1px solid ${color}77;border-radius:6px;padding:2px 8px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:${color};white-space:nowrap;${isSel ? 'border-color:rgba(255,255,255,.5);' : ''}">${node.name}</div>
+    </div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+}
+
+function initMap() {
+  map = L.map('map', { zoomControl: true });
+  L.tileLayer('https://api.maptiler.com/maps/base-v4/{z}/{x}/{y}.png?key=iyILnEelyXqjW1ffJxH4', {
+    attribution: '© <a href="https://www.maptiler.com/copyright/" target="_blank">MapTiler</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>',
+    tileSize: 512,
+    zoomOffset: -1,
+    maxZoom: 20,
+  }).addTo(map);
+  placeMarkers();
+  // Fix sizing after flex layout settles
+  requestAnimationFrame(() => map.invalidateSize());
+}
+
+function placeMarkers() {
+  Object.values(markers).forEach(m => m.remove());
+  markers = {};
+
+  nodes.forEach(node => {
+    const m = L.marker([node.lat, node.lng], {
+      icon: makeNodeIcon(node),
+      zIndexOffset: 500,
+    }).addTo(map);
+    m.on('click', () => selectNode(node));
+    markers[node.id] = m;
+  });
+
+  if (nodes.length) {
+    const bounds = L.latLngBounds(nodes.map(n => [n.lat, n.lng]));
+    map.fitBounds(bounds, { padding: [60, 60] });
+  }
+}
+
+function refreshMarker(id) {
+  const node = nodes.find(n => n.id === id);
+  if (!node || !markers[id]) return;
+  markers[id].setIcon(makeNodeIcon(node));
+}
+
+// ── Node selection ────────────────────────────────────────────────────────────
+function selectNode(node) {
+  const prevId = selectedNode?.id;
+  selectedNode = node;
+  if (prevId && prevId !== node.id) refreshMarker(prevId); // clear old selection ring
+  refreshMarker(node.id); // apply selection ring immediately
+  $('emptyState').style.display = 'none';
+  $('nodeDetail').style.display = 'flex';
+  $('lastSeenLine').style.display = 'block';
+
+  $('dName').textContent = node.name;
+  $('dCoords').textContent = `📍 ${node.lat.toFixed(5)}, ${node.lng.toFixed(5)}`;
+  const sf = (node.sensorFilter || '').trim();
+  $('dAddr').textContent = sf ? `🔍 sensor_id = ${sf}` : `🔍 all sensors`;
+  updateBadge(node.id);
+
+  clearInterval(waveTimer);
+  clearInterval(metricTimer);
+  fetchWave(node);
+  fetchMetrics(node);
+  waveTimer   = setInterval(() => fetchWave(node),    300);
+  metricTimer = setInterval(() => fetchMetrics(node), 3000);
+}
+
+function updateBadge(id) {
+  const s = nodeStatus[id];
+  const b = $('dBadge');
+  if (!s || s.online === null || s.online === undefined) {
+    b.className = 'badge unknown'; b.textContent = 'Checking…';
+  } else if (s.online) {
+    b.className = 'badge online';  b.textContent = '● Online';
+  } else {
+    b.className = 'badge offline'; b.textContent = '○ Offline';
+  }
+  const ls = s?.lastSeen;
+  $('dLastSeen').textContent = ls ? `🕒 ${ls}` : '🕒 —';
+  $('lastSeenLine').textContent = ls ? `Last data received: ${ls}` : '';
+}
+
+// ── Waveform ──────────────────────────────────────────────────────────────────
+function initWaveChart() {
+  const ctx = $('waveCanvas').getContext('2d');
+  waveChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: '#38bdf8',
+        backgroundColor: 'rgba(56,189,248,0.06)',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: true,
+        tension: 0,
+      }],
     },
-    scales: {
-      x: {
-        display: true,
-        ticks: { color: '#7a8ba3', font: { size: 10, family: 'JetBrains Mono' }, maxTicksLimit: 6 },
-        grid: { color: 'rgba(30,42,58,0.5)' }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: {
+          display: true,
+          ticks: { maxTicksLimit: 5, color: '#7a8ba3', font: { size: 9, family: 'JetBrains Mono' } },
+          grid: { color: 'rgba(30,42,58,.4)' },
+        },
+        y: {
+          display: true,
+          ticks: {
+            maxTicksLimit: 4,
+            color: '#7a8ba3',
+            font: { size: 9, family: 'JetBrains Mono' },
+            callback: v => v.toFixed(0) + ' V',
+          },
+          grid: { color: 'rgba(30,42,58,.4)' },
+        },
       },
-      y: {
-        display: true,
-        ticks: { color: '#7a8ba3', font: { size: 10, family: 'JetBrains Mono' }, maxTicksLimit: 5 },
-        grid: { color: 'rgba(30,42,58,0.5)' }
-      }
-    }
+    },
   });
+}
 
-  const makeDataset = (color) => ({
-    data: [],
-    borderColor: color,
-    backgroundColor: color + '18',
-    borderWidth: 2,
-    pointRadius: 0,
-    fill: true,
-    tension: 0.3
-  });
+async function fetchWave(node) {
+  try {
+    const sc = sensorClause(node);
+    const sql = `SELECT timestamp, voltage FROM grid_readings${sc ? ' WHERE' + sc.slice(4) : ''} ORDER BY timestamp DESC LIMIT 500`;
+    const rows = await query(sql, 'network');
+    setConn(true);
+    if (!rows || !rows.length) return;
 
-  const charts = {};
-  function initCharts() {
-    const pairs = [
-      ['chartVoltage', 'Voltage', '#38bdf8', 'V'],
-      ['chartCurrent', 'Current', '#a78bfa', 'A'],
-      ['chartPower', 'Power', '#34d399', 'kW'],
-      ['chartFrequency', 'Frequency', '#fbbf24', 'Hz'],
-    ];
-    pairs.forEach(([id, label, color, unit]) => {
-      const ctx = $(id).getContext('2d');
-      charts[id] = new Chart(ctx, {
-        type: 'line',
-        data: { labels: [], datasets: [makeDataset(color)] },
-        options: chartOpts(label, color, unit)
-      });
+    rows.reverse(); // chronological order
+
+    const labels = rows.map(r => {
+      const ts = r.timestamp || r.Timestamp || '';
+      // Show HH:MM:SS.mmm — works for both ISO and AnyLog-format strings
+      return ts.length >= 19 ? ts.slice(11, 23) : ts;
     });
+    const vals = rows.map(r => parseFloat(r.voltage || r.Voltage || 0));
+
+    waveChart.data.labels = labels;
+    waveChart.data.datasets[0].data = vals;
+    waveChart.update('none');
+
+    $('waveSub').textContent = `${rows.length} raw readings · latest ${labels[labels.length - 1]}`;
+
+    // Mark node online
+    nodeStatus[node.id] = { online: true, lastSeen: new Date().toLocaleTimeString() };
+    refreshMarker(node.id);
+    if (selectedNode?.id === node.id) updateBadge(node.id);
+
+  } catch (e) {
+    setConn(false);
+    console.error('waveform:', e);
   }
-  initCharts();
+}
 
-  // --- Data fetch & render ---
-  const MAX_POINTS = 60;
-  const history = {
-    chartVoltage: { labels: [], data: [] },
-    chartCurrent: { labels: [], data: [] },
-    chartPower:   { labels: [], data: [] },
-    chartFrequency: { labels: [], data: [] },
-  };
+// ── Metrics ───────────────────────────────────────────────────────────────────
+async function fetchMetrics(node) {
+  try {
+    const ago = isoToAL(Date.now() - 60_000);
+    const sql = `SELECT avg(voltage) as av, min(voltage) as lv, max(voltage) as hv,`
+      + ` avg(frequency) as af, min(frequency) as lf, max(frequency) as hf`
+      + ` FROM grid_readings WHERE timestamp >= '${ago}'${sensorClause(node)}`;
+    const rows = await query(sql, 'network');
+    if (!rows || !rows.length) return;
+    const m = rows[0];
 
-  function setStatus(ok) {
-    $('statusDot').className = ok ? 'status-dot ok' : 'status-dot';
-    $('statusText').textContent = ok ? `Connected — ${ANYLOG_HOST}:${ANYLOG_PORT}` : 'Disconnected';
-  }
-
-  function updateCard(metric, avg, min, max) {
-    $('val' + metric).textContent = avg != null ? avg.toFixed(1) : '—';
-    $('lo' + metric).textContent  = min != null ? `min ${min.toFixed(1)}` : 'min —';
-    $('hi' + metric).textContent  = max != null ? `max ${max.toFixed(1)}` : 'max —';
-    const card = $('card' + metric);
-    if (avg != null) { card.classList.add('active'); } else { card.classList.remove('active'); }
-  }
-
-  function pushChart(chartId, label, value) {
-    const h = history[chartId];
-    h.labels.push(label);
-    h.data.push(value);
-    if (h.labels.length > MAX_POINTS) {
-      h.labels.shift();
-      h.data.shift();
-    }
-    const chart = charts[chartId];
-    chart.data.labels = [...h.labels];
-    chart.data.datasets[0].data = [...h.data];
-    chart.update('none');
-  }
-
-  function updateHealth(anomalyCounts) {
-    const total = Object.values(anomalyCounts).reduce((a, b) => a + b, 0);
-    const banner = $('healthBanner');
-    const icon = $('healthIcon');
-    const title = $('healthTitle');
-    const desc = $('healthDesc');
-
-    if (total === 0) {
-      banner.className = 'health-banner offline';
-      icon.textContent = '⏳';
-      title.textContent = 'No recent data';
-      desc.textContent = 'The data generator may be stopped. Readings will appear here automatically when data flows in.';
-      return;
-    }
-
-    const severe = (anomalyCounts[3] || 0) + (anomalyCounts[4] || 0);
-    const moderate = anomalyCounts[2] || 0;
-    const severeRatio = severe / total;
-    const moderateRatio = moderate / total;
-
-    if (severeRatio > 0.1) {
-      banner.className = 'health-banner danger';
-      icon.textContent = '🚨';
-      title.textContent = 'Grid anomalies detected';
-      desc.textContent = `${severe} out of ${total} recent readings show significant or critical anomalies. This may indicate a fault or unusual load.`;
-    } else if (moderateRatio > 0.15 || severeRatio > 0.02) {
-      banner.className = 'health-banner warning';
-      icon.textContent = '⚠️';
-      title.textContent = 'Minor issues on the grid';
-      desc.textContent = `Some sensors are reporting deviations. ${moderate} moderate and ${severe} significant/critical readings in the last window.`;
-    } else {
-      banner.className = 'health-banner healthy';
-      icon.textContent = '✅';
-      title.textContent = 'Grid is healthy';
-      desc.textContent = `All ${total} recent readings look normal. Voltage, current, power, and frequency are within expected ranges.`;
-    }
-  }
-
-  function updateAnomalyBar(counts) {
-    const total = Object.values(counts).reduce((a, b) => a + b, 0);
-    const bar = $('anomalyBar');
-    if (total === 0) {
-      bar.innerHTML = '<div style="flex:1;background:var(--surface-raised);color:var(--text-muted);font-size:12px;">No data</div>';
-      return;
-    }
-    const colors = { 0: 'var(--green)', 1: 'var(--accent)', 2: 'var(--yellow)', 3: 'var(--orange)', 4: 'var(--red)' };
-    bar.innerHTML = '';
-    for (let i = 0; i <= 4; i++) {
-      const c = counts[i] || 0;
-      if (c === 0) continue;
-      const pct = (c / total * 100);
-      const div = document.createElement('div');
-      div.style.flex = c;
-      div.style.background = colors[i];
-      div.style.color = i <= 1 ? '#0b0f14' : '#0b0f14';
-      div.textContent = pct >= 5 ? `${pct.toFixed(0)}%` : '';
-      bar.appendChild(div);
-    }
-  }
-
-  async function fetchData() {
-    try {
-      // Query latest aggregated values from AnyLog
-      const now = new Date().toISOString();
-      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-
-      // Main metrics query - latest averages
-      const metricsSQL = `SELECT avg(voltage) as avg_voltage, min(voltage) as min_voltage, max(voltage) as max_voltage, avg(current) as avg_current, min(current) as min_current, max(current) as max_current, avg(power) as avg_power, min(power) as min_power, max(power) as max_power, avg(frequency) as avg_frequency, min(frequency) as min_frequency, max(frequency) as max_frequency FROM grid_readings WHERE timestamp >= '${fiveMinAgo}' AND timestamp <= '${now}'`;
-
-      // Anomaly counts
-      const anomalySQL = `SELECT anomaly_label, count(*) as cnt FROM grid_readings WHERE timestamp >= '${fiveMinAgo}' AND timestamp <= '${now}' GROUP BY anomaly_label`;
-
-      const [metricsData, anomalyData] = await Promise.all([
-        queryAnyLog(metricsSQL),
-        queryAnyLog(anomalySQL)
-      ]);
-
-      setStatus(true);
-
-      // Parse metrics
-      const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-      let hasData = false;
-
-      if (metricsData && Array.isArray(metricsData) && metricsData.length > 0) {
-        const m = metricsData[0];
-        // AnyLog may return column names with different casing - be flexible
-        const get = (obj, ...keys) => {
-          for (const k of keys) {
-            if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return parseFloat(obj[k]);
-          }
-          return null;
-        };
-
-        const avgV = get(m, 'avg_voltage', 'avg(voltage)');
-        const minV = get(m, 'min_voltage', 'min(voltage)');
-        const maxV = get(m, 'max_voltage', 'max(voltage)');
-        const avgC = get(m, 'avg_current', 'avg(current)');
-        const minC = get(m, 'min_current', 'min(current)');
-        const maxC = get(m, 'max_current', 'max(current)');
-        const avgP = get(m, 'avg_power', 'avg(power)');
-        const minP = get(m, 'min_power', 'min(power)');
-        const maxP = get(m, 'max_power', 'max(power)');
-        const avgF = get(m, 'avg_frequency', 'avg(frequency)');
-        const minF = get(m, 'min_frequency', 'min(frequency)');
-        const maxF = get(m, 'max_frequency', 'max(frequency)');
-
-        if (avgV !== null) hasData = true;
-
-        updateCard('Voltage', avgV, minV, maxV);
-        updateCard('Current', avgC, minC, maxC);
-        updateCard('Power', avgP, minP, maxP);
-        updateCard('Frequency', avgF, minF, maxF);
-
-        if (avgV !== null) pushChart('chartVoltage', timeLabel, avgV);
-        if (avgC !== null) pushChart('chartCurrent', timeLabel, avgC);
-        if (avgP !== null) pushChart('chartPower', timeLabel, avgP);
-        if (avgF !== null) pushChart('chartFrequency', timeLabel, avgF);
+    const g = (...keys) => {
+      for (const k of keys) {
+        const v = m[k];
+        if (v !== undefined && v !== null && v !== '') return parseFloat(v);
       }
+      return null;
+    };
+    const fmt = v => v != null ? v.toFixed(1) : '—';
+    const rng = (lo, hi) => (lo != null && hi != null) ? `${lo.toFixed(1)} – ${hi.toFixed(1)}` : '—';
 
-      // Parse anomaly counts
-      const anomalyCounts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
-      if (anomalyData && Array.isArray(anomalyData)) {
-        anomalyData.forEach(row => {
-          const label = parseInt(row.anomaly_label || row['anomaly_label'], 10);
-          const cnt = parseInt(row.cnt || row['count(*)'] || row['cnt'], 10);
-          if (!isNaN(label) && !isNaN(cnt)) anomalyCounts[label] = cnt;
-        });
-      }
+    const av = g('av','avg_voltage','avg(voltage)'), lv = g('lv','min_voltage'), hv = g('hv','max_voltage');
+    const af = g('af','avg_frequency','avg(frequency)'), lf = g('lf','min_frequency'), hf = g('hf','max_frequency');
 
-      updateHealth(anomalyCounts);
-      updateAnomalyBar(anomalyCounts);
+    $('mV').textContent = fmt(av); $('mVr').textContent = rng(lv, hv);
+    $('mF').textContent = fmt(af); $('mFr').textContent = rng(lf, hf);
 
-      if (hasData) {
-        $('lastUpdate').textContent = timeLabel;
-      }
+    fetchAnomalies(node);
+  } catch (e) { console.error('metrics:', e); }
+}
 
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setStatus(false);
-      $('healthBanner').className = 'health-banner offline';
-      $('healthIcon').textContent = '❌';
-      $('healthTitle').textContent = 'Cannot reach query node';
-      $('healthDesc').textContent = `Failed to connect to ${ANYLOG_HOST}:${ANYLOG_PORT}. Check that the AnyLog query node is running and the REST port is correct.`;
-    }
+async function fetchAnomalies(node) {
+  try {
+    const ago = isoToAL(Date.now() - 5 * 60_000);
+    const sql = `SELECT anomaly_label, count(*) as cnt FROM grid_readings WHERE timestamp >= '${ago}'${sensorClause(node)} GROUP BY anomaly_label`;
+    const rows = await query(sql, 'network');
+    const counts = { 0:0, 1:0, 2:0, 3:0, 4:0 };
+    (rows || []).forEach(r => {
+      const lbl = parseInt(r.anomaly_label, 10);
+      const cnt = parseInt(r.cnt || r['count(*)'] || 0, 10);
+      if (!isNaN(lbl) && lbl >= 0 && lbl <= 4) counts[lbl] = cnt;
+    });
+    renderABar(counts);
+  } catch (e) {}
+}
+
+function renderABar(counts) {
+  const total = Object.values(counts).reduce((a,b) => a+b, 0);
+  const bar = $('abar');
+  if (!total) { bar.innerHTML = '<div style="flex:1;background:var(--raised)"></div>'; return; }
+  const colors = { 0:'var(--green)', 1:'var(--accent)', 2:'var(--yellow)', 3:'var(--orange)', 4:'var(--red)' };
+  bar.innerHTML = '';
+  for (let i = 0; i <= 4; i++) {
+    const c = counts[i] || 0;
+    if (!c) continue;
+    const div = document.createElement('div');
+    div.style.flex = c;
+    div.style.background = colors[i];
+    const pct = c / total * 100;
+    div.textContent = pct >= 8 ? `${pct.toFixed(0)}%` : '';
+    bar.appendChild(div);
   }
+}
 
-  function startPolling() {
-    if (timer) clearInterval(timer);
-    setStatus(false);
-    $('statusText').textContent = 'Connecting…';
-    fetchData();
-    timer = setInterval(fetchData, REFRESH_SEC * 1000);
+// ── Node status polling (every 10 s) ─────────────────────────────────────────
+async function checkNode(node) {
+  try {
+    const ago = isoToAL(Date.now() - 2 * 60_000); // 2-min window
+    const rows = await query(
+      `SELECT count(*) as cnt FROM grid_readings WHERE timestamp >= '${ago}'${sensorClause(node)}`,
+      'network'
+    );
+    const cnt = parseInt(rows?.[0]?.cnt || rows?.[0]?.['count(*)'] || 0, 10);
+    nodeStatus[node.id] = {
+      online: cnt > 0,
+      lastSeen: cnt > 0
+        ? new Date().toLocaleTimeString()
+        : (nodeStatus[node.id]?.lastSeen || null),
+    };
+    setConn(true);
+  } catch {
+    nodeStatus[node.id] = { online: false, lastSeen: nodeStatus[node.id]?.lastSeen || null };
+    setConn(false);
   }
+  refreshMarker(node.id);
+  if (selectedNode?.id === node.id) updateBadge(node.id);
+}
 
-  startPolling();
+function pollStatus() {
+  Promise.allSettled(nodes.map(checkNode));
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+function renderNodeConfigs() {
+  const el = $('nodeConfigs');
+  el.innerHTML = '';
+  nodes.forEach((node, i) => {
+    const card = document.createElement('div');
+    card.className = 'ncard';
+    card.innerHTML = `
+      <div class="ncard-title">Node ${i+1}</div>
+      <div class="ncard-row">
+        <div class="fld"><label>Name</label><input type="text" data-i="${i}" data-f="name" value="${node.name}" /></div>
+        <div class="fld"><label>Sensor ID Filter</label><input type="text" data-i="${i}" data-f="sensorFilter" value="${node.sensorFilter || ''}" class="w180" placeholder="blank = all sensors" /></div>
+      </div>
+      <div class="ncard-row">
+        <div class="fld"><label>Latitude</label><input type="number" data-i="${i}" data-f="lat" value="${node.lat}" step="0.00001" /></div>
+        <div class="fld"><label>Longitude</label><input type="number" data-i="${i}" data-f="lng" value="${node.lng}" step="0.00001" /></div>
+      </div>`;
+    el.appendChild(card);
+  });
+}
+
+function saveSettings() {
+  HOST = $('cfgHost').value.trim();
+  PORT = $('cfgPort').value.trim();
+  lsSet('host', HOST);
+  lsSet('port', PORT);
+
+  document.querySelectorAll('[data-i][data-f]').forEach(inp => {
+    const i = +inp.dataset.i, f = inp.dataset.f;
+    nodes[i][f] = (f === 'lat' || f === 'lng') ? parseFloat(inp.value) : inp.value.trim();
+  });
+  lsSet('nodes', nodes);
+
+  $('settingsPanel').classList.remove('open');
+  $('settingsBtn').classList.remove('on');
+  placeMarkers();
+  pollStatus();
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+$('cfgHost').value = HOST;
+$('cfgPort').value = PORT;
+
+$('settingsBtn').addEventListener('click', () => {
+  const open = $('settingsPanel').classList.toggle('open');
+  $('settingsBtn').classList.toggle('on', open);
+  if (open) renderNodeConfigs();
+});
+$('cfgSave').addEventListener('click', saveSettings);
+
+initWaveChart();
+initMap();
+pollStatus();
+statusTimer = setInterval(pollStatus, 10_000);
 })();
 </script>
 </body>

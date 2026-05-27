@@ -8,6 +8,7 @@ ANYLOG_URL = "http://127.0.0.1:32149"
 DBMS = "eads"
 TABLE = "voltage_calibrated"
 SAMPLE_RATE_HZ = 7680
+STATS_SAMPLES = 4000  # one ingestor drain-batch (~0.52s at 7680 Hz)
 
 
 def anylog_query(sql: str) -> list[dict]:
@@ -15,7 +16,7 @@ def anylog_query(sql: str) -> list[dict]:
         "command": f'sql {DBMS} format=json "{sql}"',
         "User-Agent": "AnyLog/1.23",
     }
-    r = requests.get(ANYLOG_URL, headers=headers, timeout=5)
+    r = requests.get(ANYLOG_URL, headers=headers, timeout=15)
     r.raise_for_status()
     return r.json().get("Query", [])
 
@@ -39,7 +40,7 @@ def waveform():
 def stats():
     rows = anylog_query(
         f"SELECT timestamp_us, voltage_est, adc_centered_volts FROM {TABLE} "
-        f"ORDER BY timestamp DESC LIMIT {SAMPLE_RATE_HZ}"
+        f"ORDER BY timestamp DESC LIMIT {STATS_SAMPLES}"
     )
     rows.sort(key=lambda r: r["timestamp_us"])
     if not rows:

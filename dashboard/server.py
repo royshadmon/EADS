@@ -26,16 +26,6 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/api/waveform")
-def waveform():
-    rows = anylog_query(
-        f"SELECT timestamp, timestamp_us, voltage_est FROM {TABLE} "
-        f"ORDER BY timestamp DESC LIMIT 1000"
-    )
-    rows.sort(key=lambda r: r["timestamp_us"])
-    return jsonify(rows)
-
-
 @app.route("/api/stats")
 def stats():
     rows = anylog_query(
@@ -57,7 +47,6 @@ def stats():
     freq = crossings / (2 * n_seconds) if n_seconds > 0 else 0
 
     return jsonify({
-        "current": round(voltages[-1], 2),
         "min": round(min(voltages), 2),
         "max": round(max(voltages), 2),
         "avg": round(statistics.mean(voltages), 2),

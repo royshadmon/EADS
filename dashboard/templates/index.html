@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EADS Voltage Monitor</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -58,26 +57,6 @@
       margin-left: 3px;
     }
 
-    .chart-card {
-      background: #1a1d27;
-      border: 1px solid #252836;
-      border-radius: 8px;
-      padding: 18px;
-    }
-
-    .chart-card h2 {
-      font-size: 0.68rem;
-      color: #555;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 14px;
-    }
-
-    .chart-wrapper {
-      position: relative;
-      height: 280px;
-    }
-
     .footer {
       margin-top: 12px;
       font-size: 0.7rem;
@@ -98,10 +77,6 @@
 
   <div class="stats">
     <div class="stat-card">
-      <div class="label">Current</div>
-      <div class="value" id="stat-current">—<span class="unit">V</span></div>
-    </div>
-    <div class="stat-card">
       <div class="label">Min</div>
       <div class="value" id="stat-min">—<span class="unit">V</span></div>
     </div>
@@ -119,47 +94,9 @@
     </div>
   </div>
 
-  <div class="chart-card">
-    <h2>Voltage Waveform &mdash; last 1000 samples</h2>
-    <div class="chart-wrapper">
-      <canvas id="chart"></canvas>
-    </div>
-  </div>
-
   <div class="footer" id="status">Connecting...</div>
 
   <script>
-    const chart = new Chart(document.getElementById('chart').getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          data: [],
-          borderColor: '#00c896',
-          borderWidth: 1.5,
-          pointRadius: 0,
-          tension: 0.1,
-          fill: false,
-        }]
-      },
-      options: {
-        animation: false,
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: {
-            ticks: { color: '#444', maxTicksLimit: 8, maxRotation: 0 },
-            grid: { color: '#1e2130' },
-          },
-          y: {
-            ticks: { color: '#555' },
-            grid: { color: '#1e2130' },
-          }
-        }
-      }
-    });
-
     function setVal(id, value, unit) {
       document.getElementById(id).innerHTML = value + `<span class="unit">${unit}</span>`;
     }
@@ -172,18 +109,9 @@
 
     async function refresh() {
       try {
-        const [waveRes, statsRes] = await Promise.all([
-          fetch('/api/waveform'),
-          fetch('/api/stats'),
-        ]);
-        const wave = await waveRes.json();
+        const statsRes = await fetch('/api/stats');
         const stats = await statsRes.json();
 
-        chart.data.labels = wave.map(r => r.timestamp.slice(11, 19));
-        chart.data.datasets[0].data = wave.map(r => parseFloat(r.voltage_est));
-        chart.update('none');
-
-        setVal('stat-current', stats.current, 'V');
         setVal('stat-min', stats.min, 'V');
         setVal('stat-max', stats.max, 'V');
         setVal('stat-avg', stats.avg, 'V');
@@ -196,7 +124,7 @@
     }
 
     refresh();
-    setInterval(refresh, 2000);
+    setInterval(refresh, 60000);
   </script>
 
 </body>

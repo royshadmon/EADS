@@ -1,7 +1,0 @@
-# requirements.proxy.txt
-# Dependencies for the outage_proxy container only.
-# Kept separate from the generator's requirements.txt so each image stays lean.
-
-fastapi>=0.110,<1
-uvicorn[standard]>=0.29,<1
-httpx>=0.27,<1

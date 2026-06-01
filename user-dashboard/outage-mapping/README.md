@@ -199,11 +199,32 @@ for (let i = 0; i < affected.length; i += 1) {
 }
 ```
 
-Each link can be rendered as:
+To fill the area inside the linked-node lines, collect the unique nodes from the links and render a filled polygon:
 
-- a line between the two nodes
-- a span label using `formatDistance(distanceMeters(a, b))`
-- a confidence label using `confidenceLabel(confidenceScore(a, b, nodes))`
+```js
+import { polygonForNodes } from "./outage-mapping/geo.js";
+
+const linkedNodes = [...new Map(
+  links
+    .flat()
+    .map((node) => [node.id || node.name, node])
+).values()];
+
+const outagePolygon = polygonForNodes(linkedNodes);
+
+if (outagePolygon.length >= 3) {
+  L.polygon(outagePolygon, {
+    color: "#f87171",
+    weight: 1.5,
+    opacity: 0.65,
+    fillColor: "#f87171",
+    fillOpacity: 0.22,
+    interactive: false
+  }).addTo(map);
+}
+```
+
+The existing lines can stay if you still want them as boundaries. The polygon is the part that fills the inside area.
 
 ## Tuning
 

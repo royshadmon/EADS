@@ -127,6 +127,58 @@ export function areaCenter(members) {
   };
 }
 
+function cross(origin, first, second) {
+  return (first.x - origin.x) * (second.y - origin.y)
+    - (first.y - origin.y) * (second.x - origin.x);
+}
+
+export function polygonForNodes(nodes) {
+  const usableNodes = nodes.filter((node) => (
+    Number.isFinite(node?.lat) && Number.isFinite(node?.lng)
+  ));
+
+  if (usableNodes.length < 3) {
+    return [];
+  }
+
+  const center = areaCenter(usableNodes);
+  const projected = usableNodes
+    .map((node) => ({
+      ...projectedPoint(node, center),
+      lat: node.lat,
+      lng: node.lng
+    }))
+    .sort((first, second) => first.x === second.x ? first.y - second.y : first.x - second.x)
+    .filter((point, index, list) => (
+      index === 0 || point.x !== list[index - 1].x || point.y !== list[index - 1].y
+    ));
+
+  if (projected.length < 3) {
+    return [];
+  }
+
+  const lower = [];
+  projected.forEach((point) => {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  });
+
+  const upper = [];
+  [...projected].reverse().forEach((point) => {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  });
+
+  return lower
+    .slice(0, -1)
+    .concat(upper.slice(0, -1))
+    .map((point) => [point.lat, point.lng]);
+}
+
 export function sortedMembersForPath(members) {
   return [...members].sort((first, second) => {
     if (Math.abs(first.lng - second.lng) > Math.abs(first.lat - second.lat)) {

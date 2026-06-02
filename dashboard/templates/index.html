@@ -13,58 +13,69 @@
       font-family: 'Segoe UI', system-ui, sans-serif;
       padding: 24px;
       min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
-    header { margin-bottom: 24px; }
-    header h1 { font-size: 1.3rem; font-weight: 600; color: #fff; }
-    header p { font-size: 0.78rem; color: #555; margin-top: 2px; }
-
-    .stats {
+    header {
+      margin-bottom: 28px;
       display: flex;
+      align-items: baseline;
       gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 600; color: #fff; }
+    header p { font-size: 0.78rem; color: #444; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 16px;
+      flex: 1;
     }
 
     .stat-card {
       background: #1a1d27;
       border: 1px solid #252836;
-      border-radius: 8px;
-      padding: 14px 18px;
-      flex: 1;
-      min-width: 110px;
+      border-radius: 12px;
+      padding: 32px 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     .stat-card .label {
-      font-size: 0.68rem;
+      font-size: 0.72rem;
       color: #555;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 8px;
+      letter-spacing: 0.08em;
     }
 
     .stat-card .value {
-      font-size: 1.55rem;
-      font-weight: 600;
+      font-size: 3.5rem;
+      font-weight: 700;
       color: #00c896;
       line-height: 1;
+      letter-spacing: -0.02em;
     }
 
     .stat-card .unit {
-      font-size: 0.78rem;
-      color: #666;
+      font-size: 1.2rem;
+      color: #3a7a64;
       font-weight: 400;
-      margin-left: 3px;
+      margin-left: 6px;
     }
 
+    .stat-card.freq .value { color: #6ea8fe; }
+    .stat-card.freq .unit { color: #3a5a8a; }
+
     .footer {
-      margin-top: 12px;
+      margin-top: 16px;
       font-size: 0.7rem;
       color: #333;
       text-align: right;
     }
-
-    .footer.ok { color: #00c896; }
+    .footer.ok { color: #2a6b58; }
     .footer.error { color: #e05c5c; }
   </style>
 </head>
@@ -75,20 +86,20 @@
     <p>Channel 1 &mdash; 7680 Hz</p>
   </header>
 
-  <div class="stats">
+  <div class="grid">
     <div class="stat-card">
-      <div class="label">Min</div>
+      <div class="label">Min Voltage</div>
       <div class="value" id="stat-min">—<span class="unit">V</span></div>
     </div>
     <div class="stat-card">
-      <div class="label">Max</div>
+      <div class="label">Max Voltage</div>
       <div class="value" id="stat-max">—<span class="unit">V</span></div>
     </div>
     <div class="stat-card">
-      <div class="label">Avg</div>
+      <div class="label">Avg Voltage</div>
       <div class="value" id="stat-avg">—<span class="unit">V</span></div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card freq">
       <div class="label">Frequency</div>
       <div class="value" id="stat-freq">—<span class="unit">Hz</span></div>
     </div>

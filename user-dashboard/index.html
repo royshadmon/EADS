@@ -657,6 +657,19 @@ async function saveSettings() {
 
 // ── Outage Detection ──────────────────────────────────────────────────────
 let outageMarkers = {};
+let outageArea = null;
+
+function sortNodesClockwise(areaNodes) {
+  const center = areaNodes.reduce((acc, node) => ({
+    lat: acc.lat + node.lat / areaNodes.length,
+    lng: acc.lng + node.lng / areaNodes.length,
+  }), { lat: 0, lng: 0 });
+
+  return [...areaNodes].sort((a, b) => (
+    Math.atan2(a.lat - center.lat, a.lng - center.lng)
+      - Math.atan2(b.lat - center.lat, b.lng - center.lng)
+  ));
+}
 
 async function detectSharedOutages() {
   try {
@@ -670,6 +683,7 @@ async function detectSharedOutages() {
     }));
 
     const activeKeys = new Set();
+    const outageAreaNodes = new Map();
     // Detect pairs of nearby offline nodes
     for (let i = 0; i < detectedNodes.length; i++) {
       for (let j = i + 1; j < detectedNodes.length; j++) {
@@ -680,6 +694,8 @@ async function detectSharedOutages() {
 
           if (dist < 2000) {
             activeKeys.add(key);
+            outageAreaNodes.set(ni.id, ni);
+            outageAreaNodes.set(nj.id, nj);
             if (!outageMarkers[key]) {
               // Draw a line between the offline nodes to visualize shared outage
               const line = L.polyline(
@@ -700,6 +716,26 @@ async function detectSharedOutages() {
         delete outageMarkers[key];
       }
     });
+
+    const areaNodes = sortNodesClockwise([...outageAreaNodes.values()]);
+    if (areaNodes.length >= 3) {
+      const latLngs = areaNodes.map(node => [node.lat, node.lng]);
+      if (!outageArea) {
+        outageArea = L.polygon(latLngs, {
+          color: '#f87171',
+          weight: 0,
+          fillColor: '#f87171',
+          fillOpacity: 0.16,
+          interactive: false,
+        }).addTo(map);
+      } else {
+        outageArea.setLatLngs(latLngs);
+      }
+      outageArea.bringToBack();
+    } else if (outageArea) {
+      map.removeLayer(outageArea);
+      outageArea = null;
+    }
   } catch (e) {
     // Silently fail if outage detection unavailable
   }

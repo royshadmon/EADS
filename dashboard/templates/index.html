@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EADS Voltage Monitor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f1117;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      padding: 24px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      margin-bottom: 28px;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 600; color: #fff; }
+    header p { font-size: 0.78rem; color: #444; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .stat-card {
+      background: #1a1d27;
+      border: 1px solid #252836;
+      border-radius: 12px;
+      padding: 32px 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .stat-card .label {
+      font-size: 0.72rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stat-card .value {
+      font-size: 3.5rem;
+      font-weight: 700;
+      color: #00c896;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .stat-card .unit {
+      font-size: 1.2rem;
+      color: #3a7a64;
+      font-weight: 400;
+      margin-left: 6px;
+    }
+
+    .stat-card.freq .value { color: #6ea8fe; }
+    .stat-card.freq .unit { color: #3a5a8a; }
+
+    .footer {
+      margin-top: 16px;
+      font-size: 0.7rem;
+      color: #333;
+      text-align: right;
+    }
+    .footer.ok { color: #2a6b58; }
+    .footer.error { color: #e05c5c; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>EADS Voltage Monitor</h1>
+    <p>Channel 1 &mdash; 7680 Hz</p>
+  </header>
+
+  <div class="grid">
+    <div class="stat-card">
+      <div class="label">Min Voltage</div>
+      <div class="value" id="stat-min">—<span class="unit">V</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Max Voltage</div>
+      <div class="value" id="stat-max">—<span class="unit">V</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Avg Voltage</div>
+      <div class="value" id="stat-avg">—<span class="unit">V</span></div>
+    </div>
+    <div class="stat-card freq">
+      <div class="label">Frequency</div>
+      <div class="value" id="stat-freq">—<span class="unit">Hz</span></div>
+    </div>
+  </div>
+
+  <div class="footer" id="status">Connecting...</div>
+
+  <script>
+    function setVal(id, value, unit) {
+      document.getElementById(id).innerHTML = value + `<span class="unit">${unit}</span>`;
+    }
+
+    function setStatus(msg, ok = true) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = 'footer ' + (ok ? 'ok' : 'error');
+    }
+
+    async function refresh() {
+      try {
+        const statsRes = await fetch('/api/stats');
+        const stats = await statsRes.json();
+
+        setVal('stat-min', stats.min, 'V');
+        setVal('stat-max', stats.max, 'V');
+        setVal('stat-avg', stats.avg, 'V');
+        setVal('stat-freq', stats.frequency_hz, 'Hz');
+
+        setStatus('Updated ' + new Date().toLocaleTimeString());
+      } catch (e) {
+        setStatus('Error: ' + e.message, false);
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 60000);
+  </script>
+
+</body>
+</html>

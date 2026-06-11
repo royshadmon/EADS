@@ -1,0 +1,14 @@
+[Unit]
+Description=Nebula overlay lighthouse (EADS)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/nebula -config /etc/nebula/config.yml
+Restart=always
+RestartSec=5
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

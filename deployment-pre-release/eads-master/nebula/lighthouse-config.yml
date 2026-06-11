@@ -1,0 +1,72 @@
+# EADS Nebula LIGHTHOUSE config — runs natively on the master VM.
+# Identity: 10.42.0.1, signed by the same CA as every Pi.
+# Cert files generated on the MacBook (the CA never leaves it):
+#   nebula-cert sign -name "eads-lighthouse" -ip "10.42.0.1/24" \
+#       -ca-crt ca.crt -ca-key ca.key -out-crt lighthouse.crt -out-key lighthouse.key
+# then: scp ca.crt lighthouse.crt lighthouse.key <vm>:/etc/nebula/
+
+pki:
+  ca: /etc/nebula/ca.crt
+  cert: /etc/nebula/lighthouse.crt
+  key: /etc/nebula/lighthouse.key
+
+# The lighthouse IS the stable address — it maps no one.
+static_host_map: {}
+
+lighthouse:
+  am_lighthouse: true
+  interval: 60
+
+listen:
+  host: 0.0.0.0
+  port: 4242              # UDP — forwarded on the Xfinity router
+
+punchy:
+  punch: true
+  respond: true
+
+# Pis behind hostile NATs that cannot hole-punch relay THROUGH us.
+relay:
+  am_relay: true
+  use_relays: false
+
+tun:
+  disabled: false
+  dev: nebula1
+  drop_local_broadcast: false
+  drop_multicast: false
+  tx_queue: 500
+  mtu: 1300
+
+logging:
+  level: info
+  format: text
+
+firewall:
+  conntrack:
+    tcp_timeout: 12m
+    udp_timeout: 3m
+    default_timeout: 10m
+  outbound:
+    - port: any
+      proto: any
+      host: any
+  inbound:
+    # ICMP for diagnostics
+    - port: any
+      proto: icmp
+      host: any
+    # Operators dial the master ledger + REST
+    - port: 32048
+      proto: tcp
+      host: any
+    - port: 32049
+      proto: tcp
+      host: any
+    # Query node TCP + REST (query fan-out replies, overlay Grafana access)
+    - port: 32448
+      proto: tcp
+      host: any
+    - port: 32449
+      proto: tcp
+      host: any

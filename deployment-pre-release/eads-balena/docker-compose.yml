@@ -1,0 +1,181 @@
+version: "2"
+
+# EADS Pi node — six services, all on network_mode: host.
+#
+# Use host networking so services can access the Nebula interface.
+#
+# CPU budget (BCM2837B0, 4 cores, 512MB RAM):
+#   core 2     — sampling_bin ONLY (RT FIFO 60). Its DMA copy loop is hard
+#                real-time; sharing this core caused the exit-134 assertions.
+#   core 3     — all eads_ingestor threads (reader RT 50, drain, heartbeat,
+#                segwriter, metrics)
+#   cores 0,1  — AnyLog operator
+#   core 0     — nebula, gpsd, chrony, dashboard (all near-idle)
+
+services:
+  nebula:
+    build: ./nebula
+    labels:
+      # Injects BALENA_DEVICE_UUID at runtime — used as the hardware
+      # identity for plug-and-play auto-enrollment.
+      io.balena.features.balena-api: '1'
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    network_mode: host
+    cpuset: "0"
+    mem_limit: 50m
+    volumes:
+      # Publishes this node's overlay IP for deploy_anylog.sh to advertise.
+      - nebula-shared:/shared-nebula
+    # Credentials arrive via the NEBULA_CONFIG device env var, set once at
+    # enrollment by provisioning/provision_setenv.sh. Cached on-device by
+    # the supervisor: survives reboots, data purges, and cloud outages.
+
+  sampler:
+    build: ./sampler
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    cpuset: "2,3"
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
+      memlock: -1
+    # If the sampler ever balloons it dies alone instead of taking down the
+    # Pi. Normal use is ~10MB.
+    mem_limit: 60m
+    mem_reservation: 30m
+    volumes:
+      - eads-anomaly:/var/eads-anomaly
+      # Read-only: the enrolled node name (written by nebula) labels this
+      # node's health rows so fleet queries are human-readable.
+      - nebula-shared:/shared-nebula:ro
+
+  anylog-operator:
+    build: ./anylog-operator
+    labels:
+      # Makes Balena inject BALENA_DEVICE_UUID at RUNTIME (compose ${VAR}
+      # interpolation does NOT work for BALENA_* vars). deploy_anylog.sh
+      # reads it to build a stable per-device identity.
+      io.balena.features.balena-api: '1'
+    restart: unless-stopped
+    network_mode: host
+    cpuset: "0,1"
+    # Cap prevents the OOM cascade we observed: a runaway AnyLog is killed
+    # and restarted alone, without starving the sampler.
+    mem_limit: 320m
+    mem_reservation: 200m
+    environment:
+      - INIT_TYPE=prod
+      - NODE_TYPE=operator
+      - COMPANY_NAME=eads
+      - ANYLOG_SERVER_PORT=32148
+      - ANYLOG_REST_PORT=32149
+      - TCP_BIND=true
+      - REST_BIND=true
+      - DB_TYPE=sqlite
+      - DEFAULT_DBMS=eads
+      - BLOCKCHAIN_SOURCE=master
+      - BLOCKCHAIN_SYNC=5 minutes
+      # 7-DAY LOCAL RETENTION: daily partitions, keep 7, drop the rest on
+      # a daily sync. Local data is a buffer — the master-side archiver
+      # copies everything to Postgres well within this window. NOTE:
+      # partition env var names follow standard AnyLog deployment scripts;
+      # verify against `get partitions` on the first device (dialect risk).
+      - ENABLE_PARTITIONS=true
+      - TABLE_NAME=*
+      - PARTITION_COLUMN=insert_timestamp
+      - PARTITION_INTERVAL=day
+      - PARTITION_KEEP=7
+      - PARTITION_SYNC=1 day
+      - ENABLE_NOSQL=false
+      - BLOBS_STORAGE=false
+      - MONITOR_NODES=false
+      - ENABLE_MQTT=false
+      - WRITE_IMMEDIATE=false
+      - OPERATOR_THREADS=1
+      - QUERY_POOL=2
+      - REST_THREADS=3
+      - TCP_THREADS=2
+      - THRESHOLD_TIME=120 seconds
+      - THRESHOLD_VOLUME=4MB
+      # Master over the Nebula overlay. The per-device LEDGER_CONN env var
+      # set at enrollment (provision_setenv.sh) overrides this default.
+      - LEDGER_CONN=10.42.0.1:32048
+      - LICENSE_KEY=cd554412f2a4ff540e3426a4f1fcb6d50ab8d9e1130e42957b0338ea45f4303fd160a551c5200b0321101abdc9eb44169e1b1c9d5a9492b16cc870619bb5199ae806a1dfadda93e00f02d30f3a5dabc0a6a7bb8f869e37fa565962eba55cb335397a66903d8fb3014ae1e4eea46c104cad8c787a0d5ae45efbf8728cf04cb805{company:Guest,expiration:2026-08-01,type:beta}
+    volumes:
+      - nebula-shared:/shared-nebula:ro
+      - anylog-data:/app/AnyLog-Network/data
+      - anylog-blockchain:/app/AnyLog-Network/blockchain
+      - anylog-anylog:/app/AnyLog-Network/anylog
+
+  gpsd:
+    build: ./gpsd
+    restart: unless-stopped
+    privileged: true
+    # GPS HAT on UART. ipc: host so chrony can read GPS time via SHM.
+    network_mode: host
+    ipc: host
+    devices:
+      - "/dev/ttyAMA0:/dev/ttyAMA0"
+    cpuset: "0"
+    mem_limit: 40m
+    volumes:
+      # Publishes the GPS fix (lat,lon,mode) for health rows + outage map.
+      - nebula-shared:/shared-nebula
+
+  chrony:
+    build: ./chrony
+    restart: unless-stopped
+    # Disciplines the SYSTEM clock from gpsd's SHM segment. The system clock
+    # is host-wide, so only this container sets it (SYS_TIME). This is what
+    # fixes wrong timestamps at the root — GPS time with no internet needed.
+    cap_add:
+      - SYS_TIME
+    ipc: host
+    network_mode: host
+    cpuset: "0"
+    mem_limit: 40m
+    depends_on:
+      - gpsd
+
+  dashboard:
+    build: ./dashboard
+    restart: unless-stopped
+    # Local health page: http://<pi-lan-ip>:8080 — works with no cloud, no
+    # SSH. Reads the ingestor's metrics.csv (ro) + live /sys //proc + vcgencmd.
+    network_mode: host
+    cpuset: "0"
+    mem_limit: 20m
+    devices:
+      # /dev/vchiq lets vcgencmd report core voltage + undervoltage flags.
+      - "/dev/vchiq:/dev/vchiq"
+    volumes:
+      - eads-anomaly:/var/eads-anomaly:ro
+      - nebula-shared:/shared-nebula:ro
+
+  wifi-connect:
+    build: ./wifi-connect
+    labels:
+      # dbus access to the host NetworkManager — required to scan and join
+      # WiFi networks on the participant's behalf.
+      io.balena.features.dbus: '1'
+    restart: unless-stopped
+    network_mode: host
+    cpuset: "0"
+    mem_limit: 40m
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
+    cap_add:
+      - NET_ADMIN
+
+volumes:
+  anylog-data:
+  anylog-blockchain:
+  anylog-anylog:
+  eads-anomaly:
+  nebula-shared:

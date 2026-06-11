@@ -1,0 +1,320 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false },
+        "content": "# EADS — AnyLog Network Query Dashboard\n\nAll panels query through the **AnyLog Query Node** (`destination: network`), which distributes queries across all operator nodes automatically.\n\n**Filter** — Use the `filter` variable above to add WHERE conditions (e.g. `sensor_id = 'S1'` or `location = 'Zone5'`). Leave blank for all data.\n\nTime-series panels use AnyLog's optimized **increments** function. KPIs use SQL passthrough over the last hour.",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "How to use this dashboard",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "avg_voltage" },
+            "properties": [
+              { "id": "displayName", "value": "Avg Voltage (1h)" },
+              { "id": "unit", "value": "volt" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_current" },
+            "properties": [
+              { "id": "displayName", "value": "Avg Current (1h)" },
+              { "id": "unit", "value": "amp" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_power" },
+            "properties": [
+              { "id": "displayName", "value": "Avg Power (1h)" },
+              { "id": "unit", "value": "kwatt" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "avg_frequency" },
+            "properties": [
+              { "id": "displayName", "value": "Avg Frequency (1h)" },
+              { "id": "unit", "value": "hertz" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "anomaly_rate" },
+            "properties": [
+              { "id": "displayName", "value": "Anomaly Rate (1h)" },
+              { "id": "unit", "value": "percent" },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange", "value": 5 },
+                    { "color": "red", "value": 10 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 4 },
+      "id": 50,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+          "refId": "A",
+          "target": "grid_readings",
+          "type": "table",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"sql\", \"sql\": \"SELECT AVG(voltage) AS avg_voltage, AVG(current) AS avg_current, AVG(power) AS avg_power, AVG(frequency) AS avg_frequency, 100.0 * AVG(CASE WHEN anomaly_label <> 0 THEN 1 ELSE 0 END) AS anomaly_rate FROM grid_readings WHERE timestamp >= NOW() - 1 hour\", \"where\": \"${filter}\", \"time_range\": false}"
+        }
+      ],
+      "title": "KPI Summary (last hour)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false, "axisCenteredZero": false,
+            "axisColorMode": "text", "axisLabel": "Volts",
+            "fillOpacity": 10, "lineWidth": 1, "pointSize": 3,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto", "spanNulls": false
+          },
+          "unit": "volt"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 70,
+      "options": {
+        "legend": { "calcs": ["mean", "min", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+          "refId": "A",
+          "target": "grid_readings",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"timestamp\", \"value_column\": \"voltage\", \"where\": \"${filter}\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "title": "Voltage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false, "axisCenteredZero": false,
+            "axisColorMode": "text", "axisLabel": "Amps",
+            "fillOpacity": 10, "lineWidth": 1, "pointSize": 3,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto", "spanNulls": false
+          },
+          "unit": "amp"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 71,
+      "options": {
+        "legend": { "calcs": ["mean", "min", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+          "refId": "A",
+          "target": "grid_readings",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"timestamp\", \"value_column\": \"current\", \"where\": \"${filter}\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "title": "Current",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false, "axisCenteredZero": false,
+            "axisColorMode": "text", "axisLabel": "kW",
+            "fillOpacity": 10, "lineWidth": 1, "pointSize": 3,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto", "spanNulls": false
+          },
+          "unit": "kwatt"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 72,
+      "options": {
+        "legend": { "calcs": ["mean", "min", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+          "refId": "A",
+          "target": "grid_readings",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"timestamp\", \"value_column\": \"power\", \"where\": \"${filter}\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "title": "Power",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false, "axisCenteredZero": false,
+            "axisColorMode": "text", "axisLabel": "Hz",
+            "fillOpacity": 10, "lineWidth": 1, "pointSize": 3,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto", "spanNulls": false
+          },
+          "unit": "hertz"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 73,
+      "options": {
+        "legend": { "calcs": ["mean", "min", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+          "refId": "A",
+          "target": "grid_readings",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"timestamp\", \"value_column\": \"frequency\", \"where\": \"${filter}\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "title": "Frequency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false, "axisCenteredZero": false,
+            "axisColorMode": "text", "axisLabel": "Label",
+            "fillOpacity": 10, "lineWidth": 1, "pointSize": 3,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto", "spanNulls": false,
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 74,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "simpod-json-datasource", "uid": "anylog-query" },
+          "refId": "A",
+          "target": "grid_readings",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"timestamp\", \"value_column\": \"anomaly_label\", \"where\": \"${filter}\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "title": "Anomaly Label",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["eads", "anylog"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "", "value": "" },
+        "description": "Optional WHERE clause appended to all queries. Examples: sensor_id = 'S1'  |  location = 'Zone5'  |  sensor_id = 'S1' AND location = 'Zone3'",
+        "label": "Filter",
+        "name": "filter",
+        "query": "",
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": { "from": "now-5m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "EADS — AnyLog Network Query",
+  "uid": "eads-anylog-network",
+  "version": 1
+}

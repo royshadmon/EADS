@@ -1,0 +1,292 @@
+{
+  "uid": "eads-fleet",
+  "title": "EADS Fleet \u2014 Live Operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "5m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "EADS Fleet Dashboard",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Data path:** Pi operators -> Nebula overlay -> this query node (`destination: network` fans every query out to all operators).\n\nAuto-refreshes every **5 minutes**. The **outage map + alerting** live in the Fleet service on port **8090** \u2014 this dashboard is the deep-dive view. If panels show *no data*: check the query node is up (`docker ps`), then `test network` in the AnyLog CLI."
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Node health \u2014 latest reports",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "simpod-json-datasource",
+        "uid": "anylog-query"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "simpod-json-datasource",
+            "uid": "anylog-query"
+          },
+          "refId": "A",
+          "target": "node_health",
+          "type": "table",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"sql\", \"sql\": \"SELECT node_id, mode, samples_sec_actual, pending_upload_rows, pending_segments, drain_rate, disk_pct, disk_paused, uptime_sec, insert_timestamp FROM node_health ORDER BY insert_timestamp DESC LIMIT 40\", \"grafana\": {\"format_as\": \"table\"}}"
+        }
+      ],
+      "description": "Most recent node_health rows across the fleet (each node reports every 10 s)."
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Voltage estimate (all nodes)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "simpod-json-datasource",
+        "uid": "anylog-query"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": true
+          },
+          "unit": "volt"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "simpod-json-datasource",
+            "uid": "anylog-query"
+          },
+          "refId": "A",
+          "target": "voltage_calibrated",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"insert_timestamp\", \"value_column\": \"voltage_est\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "description": "Calibrated AC voltage estimate. NORMAL mode pushes 512-sample bursts every 10 s; anomalies stream continuously."
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Anomaly flag",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "datasource": {
+        "type": "simpod-json-datasource",
+        "uid": "anylog-query"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "simpod-json-datasource",
+            "uid": "anylog-query"
+          },
+          "refId": "A",
+          "target": "voltage_calibrated",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"insert_timestamp\", \"value_column\": \"is_anomaly\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "description": "1 = sample inside a detected anomaly window."
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Sampling rate (node_health)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "datasource": {
+        "type": "simpod-json-datasource",
+        "uid": "anylog-query"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "simpod-json-datasource",
+            "uid": "anylog-query"
+          },
+          "refId": "A",
+          "target": "node_health",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"insert_timestamp\", \"value_column\": \"samples_sec_actual\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "description": "Should hold ~7680. Sustained dips = sampler trouble."
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Upload backlog rows",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "datasource": {
+        "type": "simpod-json-datasource",
+        "uid": "anylog-query"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "simpod-json-datasource",
+            "uid": "anylog-query"
+          },
+          "refId": "A",
+          "target": "node_health",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"insert_timestamp\", \"value_column\": \"pending_upload_rows\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "description": "Un-drained anomaly rows buffered on SD. Should return to 0 after each event."
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Disk usage % (node_health)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "datasource": {
+        "type": "simpod-json-datasource",
+        "uid": "anylog-query"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": true
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "simpod-json-datasource",
+            "uid": "anylog-query"
+          },
+          "refId": "A",
+          "target": "node_health",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"insert_timestamp\", \"value_column\": \"disk_pct\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Drain rate",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
+      "datasource": {
+        "type": "simpod-json-datasource",
+        "uid": "anylog-query"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "simpod-json-datasource",
+            "uid": "anylog-query"
+          },
+          "refId": "A",
+          "target": "node_health",
+          "type": "timeseries",
+          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"insert_timestamp\", \"value_column\": \"drain_rate\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+        }
+      ],
+      "description": "Adaptive 2000-3000 rows/s during anomaly drain."
+    }
+  ]
+}

@@ -1,0 +1,175 @@
+version: "3.8"
+
+# EADS Master Stack — runs on the Ubuntu VM (eads-master).
+#
+# WHICH ANYLOG NODES MUST RUN, AND WHY:
+#   anylog-master  — the blockchain/ledger. Operators (the Pis) register
+#                    here and sync policies from it every 5 minutes
+#                    (BLOCKCHAIN_SYNC on the Pis — this is the "updates to
+#                    all boxes" channel: a policy added to the master
+#                    propagates to every box within one sync cycle).
+#   anylog-query   — REQUIRED for the website. Grafana and the Fleet
+#                    service query THIS node with destination:network; it
+#                    fans the SQL out to every Pi operator and merges the
+#                    results. The dashboard showed "Disconnected" before
+#                    precisely because this node was not running.
+#   operators      — live on the Pis (not here).
+#
+# The two AnyLog containers use network_mode: host so that:
+#   - they see the nebula1 overlay interface (lighthouse runs on this host)
+#   - 127.0.0.1:32048 works as the query node's LEDGER_CONN
+#   - operators dialing 10.42.0.1:32048/32448 over the overlay land here.
+
+services:
+
+  anylog-master:
+    image: anylogco/anylog-network:ucsc-amd-fixed
+    container_name: anylog-master
+    restart: unless-stopped
+    network_mode: host          # TCP 32048, REST 32049
+    environment:
+      - INIT_TYPE=prod
+      - NODE_TYPE=master
+      - NODE_NAME=eads-master
+      - COMPANY_NAME=eads
+      - ANYLOG_PATH=/app
+      - LOCAL_SCRIPTS=/app/deployment-scripts
+      - ANYLOG_SERVER_PORT=32048
+      - ANYLOG_REST_PORT=32049
+      - TCP_BIND=false
+      - REST_BIND=false
+      # Advertise the OVERLAY address: every node that learns about the
+      # master from the ledger must reach it at its Nebula IP.
+      - OVERLAY_IP=10.42.0.1
+      - LEDGER_CONN=127.0.0.1:32048
+      - DB_TYPE=psql
+      - DB_USER=eads
+      - DB_PASSWD=${POSTGRES_PASSWORD}
+      - DB_IP=127.0.0.1
+      - DB_PORT=5432
+      - LICENSE_KEY=${ANYLOG_LICENSE}
+    volumes:
+      - master-anylog:/app/AnyLog-Network/anylog
+      - master-blockchain:/app/AnyLog-Network/blockchain
+      - master-data:/app/AnyLog-Network/data
+    depends_on:
+      - postgres
+
+  anylog-query:
+    image: anylogco/anylog-network:ucsc-amd-fixed
+    container_name: anylog-query
+    restart: unless-stopped
+    network_mode: host          # TCP 32448, REST 32449
+    environment:
+      - INIT_TYPE=prod
+      - NODE_TYPE=query
+      - NODE_NAME=eads-query
+      - COMPANY_NAME=eads
+      - ANYLOG_PATH=/app
+      - LOCAL_SCRIPTS=/app/deployment-scripts
+      - ANYLOG_SERVER_PORT=32448
+      - ANYLOG_REST_PORT=32449
+      - TCP_BIND=false
+      - REST_BIND=false
+      - OVERLAY_IP=10.42.0.1
+      - LEDGER_CONN=127.0.0.1:32048
+      - DB_TYPE=sqlite
+      - DEFAULT_DBMS=eads
+      - LICENSE_KEY=${ANYLOG_LICENSE}
+    volumes:
+      - query-anylog:/app/AnyLog-Network/anylog
+      - query-blockchain:/app/AnyLog-Network/blockchain
+      - query-data:/app/AnyLog-Network/data
+    depends_on:
+      - anylog-master
+
+  postgres:
+    image: postgres:15
+    container_name: eads-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=eads
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=eads_data
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: eads-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=simpod-json-datasource
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/eads-fleet.json
+      - ANYLOG_QUERY_HOST=host.docker.internal
+      - ANYLOG_QUERY_PORT=32449
+      - ANYLOG_DEFAULT_DBMS=eads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-storage:/var/lib/grafana
+
+  fleet:
+    build: ./fleet
+    container_name: eads-fleet
+    restart: unless-stopped
+    # host networking: the overlay probe (layer 2 of outage detection)
+    # dials each Pi at 10.42.0.N:32149 through the lighthouse host's
+    # nebula1 interface. Serves :8090 (status/map) and :8443 (enrollment).
+    network_mode: host
+    environment:
+      - QUERY_CONN=127.0.0.1:32449
+      - DEFAULT_DBMS=eads
+      - POLL_SEC=60
+      - REFRESH_SEC=300         # 5-minute page auto-refresh
+      - STALE_MIN=3
+      - OUTAGE_MIN=10
+      - ENROLL_TOKEN=${ENROLL_TOKEN}
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_TO=${EMAIL_TO:-}
+    volumes:
+      - ./identity-pool:/pool:ro
+      - ./enroll-tls:/tls:ro
+      - fleet-data:/data
+
+  archiver:
+    build: ./archiver
+    container_name: eads-archiver
+    restart: unless-stopped
+    network_mode: host        # on the mesh host: reaches query node AND
+                              # postgres on 127.0.0.1
+    environment:
+      - QUERY_CONN=127.0.0.1:32449
+      - DEFAULT_DBMS=eads
+      - ARCHIVE_SEC=300
+      - ARCHIVE_TABLES=voltage_calibrated,node_health
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PG_DSN=host=127.0.0.1 port=5432 dbname=eads_data user=eads password=${POSTGRES_PASSWORD}
+    depends_on:
+      - postgres
+      - anylog-query
+
+volumes:
+  master-anylog:
+  master-blockchain:
+  master-data:
+  query-anylog:
+  query-blockchain:
+  query-data:
+  pgdata:
+  grafana-storage:
+  fleet-data:

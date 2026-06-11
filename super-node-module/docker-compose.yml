@@ -1,0 +1,87 @@
+services:
+  anylog-master:
+    image: anylogco/anylog-network:${TAG:-ucsc-arm}
+    container_name: anylog-master
+    restart: always
+    stdin_open: true
+    tty: true
+    network_mode: host
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    cap_add:
+      - NET_ADMIN
+    env_file:
+      - ./anylog/master-configs/base_configs.env
+      - ./anylog/master-configs/advance_configs.env
+      - .env
+    volumes:
+      - master-external-lib:/app/AnyLog-Network/external_lib
+      - master-anylog:/app/AnyLog-Network/anylog
+      - master-blockchain:/app/AnyLog-Network/blockchain
+      - master-data:/app/AnyLog-Network/data
+      - master-scripts:/app/deployment-scripts
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  anylog-query:
+    image: anylogco/anylog-network:${TAG:-ucsc-arm}
+    container_name: anylog-query
+    restart: always
+    stdin_open: true
+    tty: true
+    network_mode: host
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      - anylog-master
+    env_file:
+      - ./anylog/query-configs/base_configs.env
+      - ./anylog/query-configs/advance_configs.env
+      - .env
+    volumes:
+      - query-external-lib:/app/AnyLog-Network/external_lib
+      - query-anylog:/app/AnyLog-Network/anylog
+      - query-blockchain:/app/AnyLog-Network/blockchain
+      - query-data:/app/AnyLog-Network/data
+      - query-scripts:/app/deployment-scripts
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  super-node:
+    build:
+      context: .
+      dockerfile: super-node/Dockerfile
+    container_name: super-node
+    restart: always
+    depends_on:
+      - anylog-query
+    ports:
+      - "8080:8080"
+    environment:
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_TO: ${EMAIL_TO:-}
+      EMAIL_USERNAME: ${EMAIL_USERNAME:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      EMAIL_SMTP_HOST: ${EMAIL_SMTP_HOST:-smtp.gmail.com}
+      EMAIL_SMTP_PORT: ${EMAIL_SMTP_PORT:-587}
+      ANYLOG_HOST: ${ANYLOG_HOST:-host.docker.internal}
+      ANYLOG_PORT: ${ANYLOG_PORT:-32449}
+      ANYLOG_DBMS: ${ANYLOG_DBMS:-eads}
+      MONITOR_INTERVAL_S: ${MONITOR_INTERVAL_S:-20}
+      OFFLINE_WINDOW_S: ${OFFLINE_WINDOW_S:-120}
+    volumes:
+      - ./anomaly_notification:/app/anomaly_notification:ro
+      - ./user-dashboard:/app/user-dashboard:ro
+      - ./super-node/app:/app/app:ro
+
+volumes:
+  master-external-lib:
+  master-anylog:
+  master-blockchain:
+  master-data:
+  master-scripts:
+  query-external-lib:
+  query-anylog:
+  query-blockchain:
+  query-data:
+  query-scripts:

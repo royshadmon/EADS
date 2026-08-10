@@ -4,7 +4,7 @@
 FROM debian:bookworm-slim
 
 # Architecture is auto-detected by Balena builders for the target Pi
-ARG NEBULA_VERSION=1.9.5
+ARG NEBULA_VERSION=1.10.3
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl iproute2 jq \

@@ -45,9 +45,28 @@ start_sampler_loop() {
 }
 start_sampler_loop &
 
-echo "[EADS] Waiting for AnyLog to be ready..."
-until curl -sf -H "command: get status" -H "User-Agent: AnyLog/1.23" http://127.0.0.1:32149 > /dev/null 2>&1; do
-    echo "[EADS] AnyLog not ready yet, retrying in 10 seconds..."
+# AnyLog's REST listener binds to the Nebula overlay IP (REST_BIND=true),
+# not 0.0.0.0 — so loopback never answers. Nebula publishes this node's
+# overlay address for exactly this purpose; fall back to loopback for
+# setups where REST_BIND=false.
+# Re-read the overlay IP on EVERY pass. On a cold boot all containers start
+# together and nebula has not finished enrolling yet, so /shared-nebula/ip
+# does not exist for the first minute or two. Reading it once at startup
+# would latch the 127.0.0.1 fallback permanently and the sampler would wait
+# forever against a loopback address that never answers.
+echo "[EADS] Waiting for AnyLog (resolving overlay IP each attempt)..."
+while true; do
+    ANYLOG_HOST="$(cat /shared-nebula/ip 2>/dev/null | tr -d '[:space:]')"
+    if [ -z "$ANYLOG_HOST" ]; then
+        echo "[EADS] nebula has not published /shared-nebula/ip yet (still enrolling?); retrying in 10s"
+        sleep 10
+        continue
+    fi
+    ANYLOG_REST="${ANYLOG_HOST}:32149"
+    if curl -sf -H "command: get status" -H "User-Agent: AnyLog/1.23" "http://${ANYLOG_REST}" > /dev/null 2>&1; then
+        break
+    fi
+    echo "[EADS] AnyLog not ready yet at ${ANYLOG_REST}, retrying in 10 seconds..."
     sleep 10
 done
 
@@ -55,7 +74,7 @@ echo "[EADS] AnyLog is ready, starting C ingestor..."
 while true; do
     /app/eads_ingestor \
         --socket /var/sampling/samples.sock \
-        --conn 127.0.0.1:32149 \
+        --conn "${ANYLOG_REST}" \
         --buffer-path /var/eads-anomaly \
         --drain-batch 4000 \
         --sample-rate 7680 \

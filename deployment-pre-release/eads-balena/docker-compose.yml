@@ -89,9 +89,9 @@ services:
       - ENABLE_PARTITIONS=true
       - TABLE_NAME=*
       - PARTITION_COLUMN=insert_timestamp
-      - PARTITION_INTERVAL=day
-      - PARTITION_KEEP=7
-      - PARTITION_SYNC=1 day
+      - PARTITION_INTERVAL=12 hours
+      - PARTITION_KEEP=2
+      - PARTITION_SYNC=1 hour
       - ENABLE_NOSQL=false
       - BLOBS_STORAGE=false
       - MONITOR_NODES=false
@@ -106,7 +106,7 @@ services:
       # Master over the Nebula overlay. The per-device LEDGER_CONN env var
       # set at enrollment (provision_setenv.sh) overrides this default.
       - LEDGER_CONN=10.42.0.1:32048
-      - LICENSE_KEY=cd554412f2a4ff540e3426a4f1fcb6d50ab8d9e1130e42957b0338ea45f4303fd160a551c5200b0321101abdc9eb44169e1b1c9d5a9492b16cc870619bb5199ae806a1dfadda93e00f02d30f3a5dabc0a6a7bb8f869e37fa565962eba55cb335397a66903d8fb3014ae1e4eea46c104cad8c787a0d5ae45efbf8728cf04cb805{company:Guest,expiration:2026-08-01,type:beta}
+      - LICENSE_KEY=${ANYLOG_LICENSE}
     volumes:
       - nebula-shared:/shared-nebula:ro
       - anylog-data:/app/AnyLog-Network/data

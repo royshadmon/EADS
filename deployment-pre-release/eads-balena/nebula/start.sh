@@ -81,7 +81,7 @@ elif [ -n "$EADS_ENROLL_TOKEN" ]; then
     jq -r '.config' /tmp/enroll.json > "$NEB_DIR/config.yml"
     rm -f /tmp/enroll.json
     chmod 600 "$NEB_DIR/config.yml"
-    if ! grep -q -- "-----BEGIN NEBULA CERTIFICATE-----" "$NEB_DIR/config.yml"; then
+    if ! grep -qE -- "-----BEGIN NEBULA CERTIFICATE( V2)?-----" "$NEB_DIR/config.yml"; then
         echo "[Nebula] FATAL: enrollment response did not contain a valid config" >&2
         exit 1
     fi

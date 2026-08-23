@@ -23,13 +23,14 @@ version: "3.8"
 services:
 
   anylog-master:
-    image: anylogco/anylog-network:ucsc-amd-fixed
+    image: anylogco/anylog-network:local-nuitka-amd
     container_name: anylog-master
     restart: unless-stopped
     network_mode: host          # TCP 32048, REST 32049
     environment:
       - INIT_TYPE=prod
       - NODE_TYPE=master
+      - BLOCKCHAIN_SOURCE=master
       - NODE_NAME=eads-master
       - COMPANY_NAME=eads
       - ANYLOG_PATH=/app
@@ -56,13 +57,14 @@ services:
       - postgres
 
   anylog-query:
-    image: anylogco/anylog-network:ucsc-amd-fixed
+    image: anylogco/anylog-network:local-nuitka-amd
     container_name: anylog-query
     restart: unless-stopped
     network_mode: host          # TCP 32448, REST 32449
     environment:
       - INIT_TYPE=prod
       - NODE_TYPE=query
+      - BLOCKCHAIN_SOURCE=master
       - NODE_NAME=eads-query
       - COMPANY_NAME=eads
       - ANYLOG_PATH=/app
@@ -155,7 +157,8 @@ services:
     environment:
       - QUERY_CONN=127.0.0.1:32449
       - DEFAULT_DBMS=eads
-      - ARCHIVE_SEC=300
+      - ARCHIVE_SEC=60
+      - BATCH_LIMIT=40000
       - ARCHIVE_TABLES=voltage_calibrated,node_health
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - PG_DSN=host=127.0.0.1 port=5432 dbname=eads_data user=eads password=${POSTGRES_PASSWORD}

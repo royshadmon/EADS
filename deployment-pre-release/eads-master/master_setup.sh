@@ -13,7 +13,7 @@ warn()  { echo -e "${YELLOW}[!] $1${NC}"; }
 error() { echo -e "${RED}[✗] $1${NC}"; exit 1; }
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-NEBULA_VERSION=1.9.5
+NEBULA_VERSION=1.10.0
 
 # ── 0. Preflight ─────────────────────────────────────────────────────────
 command -v docker >/dev/null || error "docker not installed"
@@ -50,7 +50,7 @@ for f in ca.crt lighthouse.crt lighthouse.key; do
 done
 sudo cp "$HERE/nebula/lighthouse-config.yml" /etc/nebula/config.yml
 sudo chmod 600 /etc/nebula/lighthouse.key /etc/nebula/config.yml
-/usr/local/bin/nebula -test -config /etc/nebula/config.yml \
+sudo /usr/local/bin/nebula -test -config /etc/nebula/config.yml \
     || error "lighthouse config failed validation"
 sudo cp "$HERE/nebula/nebula-lighthouse.service" /etc/systemd/system/
 sudo systemctl daemon-reload

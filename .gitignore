@@ -186,3 +186,15 @@ deployment-pre-release/**/.env
 deployment-pre-release/**/.env.*
 deployment-pre-release/**/*.tar.gz
 deployment-pre-release/**/provisioned.log
+
+# Nebula identity pool — each config.yml contains a node private key
+deployment-pre-release/eads-master/identity-pool/*
+!deployment-pre-release/eads-master/identity-pool/.gitkeep
+
+# Enrollment service TLS private key
+deployment-pre-release/eads-master/enroll-tls/enroll.key
+
+# ENROLL_TOKEN, LICENSE_KEY, DuckDNS token
+.env
+**/.env
+*.bak*

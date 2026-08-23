@@ -1,4 +1,4 @@
-FROM bronsenuc/anylog-network:arm-updated
+FROM peardotdash/anylog-network-arm:2.0.2606
 
 RUN python3 -m venv /opt/external-venv && \
     /opt/external-venv/bin/pip install --upgrade pip

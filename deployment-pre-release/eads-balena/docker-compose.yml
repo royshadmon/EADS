@@ -106,7 +106,6 @@ services:
       # Master over the Nebula overlay. The per-device LEDGER_CONN env var
       # set at enrollment (provision_setenv.sh) overrides this default.
       - LEDGER_CONN=10.42.0.1:32048
-      - LICENSE_KEY=${ANYLOG_LICENSE}
     volumes:
       - nebula-shared:/shared-nebula:ro
       - anylog-data:/app/AnyLog-Network/data

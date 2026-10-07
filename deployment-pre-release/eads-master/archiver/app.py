@@ -49,8 +49,8 @@ TABLES = [t.strip() for t in
           os.environ.get("ARCHIVE_TABLES",
                          "voltage_calibrated,node_health").split(",") if t.strip()]
 
-DEFAULT_SQL = ('select * from {table} where insert_timestamp >= \'{wm}\' '
-               'order by insert_timestamp limit {limit}')
+DEFAULT_SQL = ('select * from {table} where sample_time > \'{wm}\' '
+               'and is_anomaly = 1 order by sample_time limit {limit}')
 
 EPOCH = "1970-01-01 00:00:00"
 
@@ -135,12 +135,20 @@ def insert_rows(conn, table, rows):
     max_ts = None
     with conn.cursor() as cur:
         for row in rows:
-            node_id = str(row.get("node_id", "?"))
+            node_id = str(row.get("node_id") or row.get("tsd_name") or "?")
             try:
-                ts_us = int(str(row.get("timestamp_us", 0)))
+                ts_us = int(str(row.get("timestamp_us", "")))
             except (ValueError, TypeError):
                 ts_us = 0
-            ins_ts = row.get("insert_timestamp")
+            if not ts_us and row.get("sample_time"):
+                try:
+                    from datetime import datetime, timezone
+                    st = str(row["sample_time"]).replace("T", " ").rstrip("Z")
+                    dt = datetime.strptime(st, "%Y-%m-%d %H:%M:%S.%f")
+                    ts_us = int(dt.replace(tzinfo=timezone.utc).timestamp() * 1_000_000)
+                except Exception:
+                    ts_us = 0
+            ins_ts = row.get("sample_time") or row.get("insert_timestamp")
             if ins_ts is not None and (max_ts is None or str(ins_ts) > max_ts):
                 max_ts = str(ins_ts)
             cur.execute(

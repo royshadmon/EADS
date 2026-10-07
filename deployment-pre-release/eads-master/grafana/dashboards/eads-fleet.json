@@ -4,7 +4,7 @@
   "schemaVersion": 39,
   "version": 1,
   "editable": true,
-  "refresh": "5m",
+  "refresh": "30s",
   "time": {
     "from": "now-6h",
     "to": "now"
@@ -73,7 +73,9 @@
             "drawStyle": "line",
             "lineWidth": 1,
             "fillOpacity": 8,
-            "spanNulls": true
+            "spanNulls": true,
+            "showPoints": "always",
+            "pointSize": 2
           },
           "unit": "volt"
         },
@@ -88,10 +90,14 @@
           "refId": "A",
           "target": "voltage_calibrated",
           "type": "timeseries",
-          "payload": "{\"dbms\": \"eads\", \"type\": \"increments\", \"time_column\": \"insert_timestamp\", \"value_column\": \"voltage_est\", \"grafana\": {\"format_as\": \"timeseries\", \"data_points\": 500}}"
+          "payload": "{\"dbms\": \"eads\", \"type\": \"sql\", \"sql\": \"SELECT sample_time, voltage_est FROM voltage_calibrated WHERE tsd_name = '$node' ORDER BY sample_time DESC\", \"value_column\": \"voltage_est\", \"grafana\": {\"format_as\": \"timeseries\"}, \"time_column\": \"sample_time\"}"
         }
       ],
-      "description": "Calibrated AC voltage estimate. NORMAL mode pushes 512-sample bursts every 10 s; anomalies stream continuously."
+      "description": "Calibrated AC voltage estimate. NORMAL mode pushes 512-sample bursts every 10 s; anomalies stream continuously.",
+      "maxDataPoints": 5000,
+      "interval": null,
+      "timeFrom": null,
+      "timeShift": null
     },
     {
       "id": 4,
@@ -288,5 +294,44 @@
       ],
       "description": "Adaptive 2000-3000 rows/s during anomaly drain."
     }
-  ]
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "node",
+        "label": "node",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "dfz3c2qymqyo0e"
+        },
+        "query": "SELECT DISTINCT node_id AS __text, data->>'tsd_name' AS __value FROM (SELECT node_id, data FROM eads_archive.node_health ORDER BY archived_at DESC LIMIT 200) t ORDER BY 1",
+        "refresh": 1,
+        "sort": 1,
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "current": {},
+        "options": []
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Anomalies",
+        "enable": true,
+        "iconColor": "red",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "dfz3c2qymqyo0e"
+        },
+        "target": {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT to_timestamp(min(ts_us)/1000000.0) AS time, node_id AS text, data->>'anomaly_id' AS tags FROM eads_archive.voltage_calibrated WHERE $__timeFilter(to_timestamp(ts_us/1000000.0)) GROUP BY node_id, data->>'anomaly_id' ORDER BY 1"
+        }
+      }
+    ]
+  }
 }

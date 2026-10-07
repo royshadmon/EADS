@@ -67,7 +67,9 @@
 #define ADC_SCALE            281.793554
 
 #define ANOMALY_EXIT_QUIET_US  (1ULL * 1000000ULL)   /* 1 sec instead of 5 */
-#define ANOMALY_MAX_DURATION_US (60ULL * 1000000ULL)  /* hard cap 60 sec */
+#define ANOMALY_MAX_DURATION_US (5ULL * 1000000ULL)   /* hard cap 5 sec */
+/* After a DURATION CAP exit, refuse to re-arm until the fault clears. */
+#define ANOMALY_REARM_COOLDOWN_US (30ULL * 1000000ULL)
 
 /* Sanity bounds — reject impossibly large/small readings (likely sampler glitch) */
 #define MAX_PLAUSIBLE_VOLTAGE  500.0f    /* 500V is unreachable at 120V wall */
@@ -83,7 +85,7 @@
 
 #define LINE_BUF_SIZE   128
 #define RECV_BUF_SIZE   65536
-#define JSON_ROW_SIZE   220
+#define JSON_ROW_SIZE   264
 #define RECONNECT_DELAY 3
 #define ANOMALY_ID_LEN  17
 
@@ -140,6 +142,13 @@ typedef enum { MODE_NORMAL = 0, MODE_ANOMALY = 1 } node_mode_t;
 static node_mode_t  current_mode      = MODE_NORMAL;
 static uint64_t     mode_entered_us   = 0;
 static uint64_t     last_anomaly_us   = 0;
+static bool         rearm_blocked = false;
+/* Flags of the currently active anomaly, and how long a pure-OUTAGE event
+ * keeps writing samples. A flat line carries no information, so we capture
+ * the onset (plus the 2 s pre-trigger ring) and then stop writing until
+ * voltage returns. */
+static uint32_t     current_flags = 0;
+#define OUTAGE_CAPTURE_US (1ULL * 1000000ULL)   /* 1 s of onset is plenty */
 static char         current_anomaly_id[ANOMALY_ID_LEN] = "";
 static pthread_mutex_t state_mutex    = PTHREAD_MUTEX_INITIALIZER;
 
@@ -378,12 +387,31 @@ static int rest_put_to_table(const char *table, const char *data, size_t len,
     return 1;
 }
 
+/* Format epoch microseconds as "YYYY-MM-DD HH:MM:SS.ffffff" (UTC). */
+static char *fast_ts_to_iso(uint64_t ts_us, char *p) {
+    static __thread time_t cached_sec = (time_t)-1;
+    static __thread char   cached_str[20];
+    time_t secs = (time_t)(ts_us / 1000000ULL);
+    uint32_t frac = (uint32_t)(ts_us % 1000000ULL);
+    if (secs != cached_sec) {
+        struct tm tmv;
+        gmtime_r(&secs, &tmv);
+        strftime(cached_str, sizeof(cached_str), "%Y-%m-%d %H:%M:%S", &tmv);
+        cached_sec = secs;
+    }
+    memcpy(p, cached_str, 19); p += 19;
+    *p++ = '.';
+    for (int d = 5; d >= 0; d--) { p[d] = (char)('0' + (frac % 10)); frac /= 10; }
+    return p + 6;
+}
+
 /* ── JSON builders ─────────────────────────────────────────────────── */
 /* Build JSON array from segment_sample_t (used by both drain and burst) */
 static size_t build_voltage_json(char *out, size_t cap,
                                  const segment_sample_t *samples, size_t n) {
     (void)cap;
     static const char ROW_TS[]    = "{\"timestamp_us\":\"";
+    static const char ROW_ST0[]   = "{\"sample_time\":\"";
     static const char ROW_RAW[]   = "\",\"raw_count\":\"";
     static const char ROW_INP[]   = "\",\"adc_input_volts\":\"";
     static const char ROW_CEN[]   = "\",\"adc_centered_volts\":\"";
@@ -395,8 +423,8 @@ static size_t build_voltage_json(char *out, size_t cap,
     *p++ = '[';
     for (size_t i = 0; i < n; i++) {
         if (i > 0) *p++ = ',';
-        memcpy(p, ROW_TS, sizeof(ROW_TS)-1); p += sizeof(ROW_TS)-1;
-        p = fast_u64toa(samples[i].ts_us, p);
+        memcpy(p, ROW_ST0, sizeof(ROW_ST0)-1); p += sizeof(ROW_ST0)-1;
+        p = fast_ts_to_iso(samples[i].ts_us, p);
         memcpy(p, ROW_RAW, sizeof(ROW_RAW)-1); p += sizeof(ROW_RAW)-1;
         p = fast_itoa(samples[i].raw_count, p);
         memcpy(p, ROW_INP, sizeof(ROW_INP)-1); p += sizeof(ROW_INP)-1;
@@ -658,6 +686,7 @@ static void enter_anomaly_locked(uint64_t ts_us, uint32_t flags,
     mode_entered_us = ts_us;
     last_anomaly_us = ts_us;
     mint_anomaly_id(current_anomaly_id);
+    current_flags   = flags;
     total_transitions++;
     char fbuf[64];
     pq_flags_to_str(flags, fbuf, sizeof(fbuf));
@@ -684,6 +713,8 @@ static void maybe_exit_anomaly(uint64_t now_ts_us) {
             current_mode = MODE_NORMAL;
             current_anomaly_id[0] = '\0';
             total_transitions++;
+            /* Sustained fault: block re-arm so we do not loop capturing it. */
+            rearm_blocked = duration_exit;
             /* Queue close ctrl message — segwriter_thread does fclose+fsync */
             segq_push_ctrl_close(now_ts_us);
         }
@@ -1277,7 +1308,7 @@ static void reader_loop(void) {
                         if (result.anomaly_flags) {
                             total_anomaly_windows++;
                             pthread_mutex_lock(&state_mutex);
-                            if (current_mode == MODE_NORMAL) {
+                            if (current_mode == MODE_NORMAL && !rearm_blocked) {
                                 enter_anomaly_locked(result.window_start_us,
                                                      result.anomaly_flags,
                                                      result.measured_rms_v,
@@ -1288,6 +1319,9 @@ static void reader_loop(void) {
                             pthread_mutex_unlock(&state_mutex);
                         } else {
                             total_normal_windows++;
+                            pthread_mutex_lock(&state_mutex);
+                            rearm_blocked = false;
+                            pthread_mutex_unlock(&state_mutex);
                         }
                         maybe_exit_anomaly(ts_us);
                     }
@@ -1320,7 +1354,15 @@ static void reader_loop(void) {
                     /* During ANOMALY: push to segment queue (NOT disk).
                      * segwriter_thread handles the slow disk I/O off our path. */
                     if (in_anomaly) {
-                        segq_push_sample(&s);
+                        /* Pure OUTAGE: flat line, nothing to learn after the
+                         * onset. Keep the state, stop burning disk + drain. */
+                        bool outage_only, past_onset;
+                        pthread_mutex_lock(&state_mutex);
+                        outage_only = (current_flags == PQ_FLAG_OUTAGE);
+                        past_onset  = (ts_us - mode_entered_us) > OUTAGE_CAPTURE_US;
+                        pthread_mutex_unlock(&state_mutex);
+                        if (!(outage_only && past_onset))
+                            segq_push_sample(&s);
                     }
                 } else {
                     if (partial < LINE_BUF_SIZE - 1)
